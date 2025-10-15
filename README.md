@@ -1,11 +1,14 @@
-## Group Members
-- Rushil Riyaz
-- Valentin Toscano 
-- Ayman Kandouli
-- Hamza Madany
+## Product
+A chat application that answers questions about Lancaster University's Manual of Academic Regulations and Procedures (MARP). 
 
-## Tier 1 Foundation Feature 
-- User Authentication & Session Management
+## Target Audience 
+Students and staff who need quick access to university regulations.
 
-## Tier 2 Advanced Feature
-- To be decided
+## Value 
+Reliable, quickly accesible information with sources -- no hallucinations. 
+
+## Key Features 
+- Answers derived from MARP PDF documents
+- Properly cited (title, page number, and link)
+- Presented in an understanble manner
+- If no suitable source exists -> explicitly state "not certain / no source found"
