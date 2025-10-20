@@ -1,13 +1,15 @@
-# Product Goal
+# 1) Product Goal & Vision
 
-Build a chat application that answers questions about Lancaster University’s Manual of Academic Regulations and Procedures (MARP) with reliable, cited responses. Target users are students and staff who need quick, trustworthy access to regulations. Value: fast, source-backed answers and explicit “not certain / no source found” fallback when evidence is missing.
+## Product Goal
 
-# Vision
+Build a chat application that answers questions about Lancaster University’s **Manual of Academic Regulations and Procedures (MARP)** with **reliable, cited** responses. Target users are students and staff who need quick, trustworthy access to regulations. Value: fast, source‑backed answers and an explicit fallback when evidence is missing.
 
-A production-minded, networked system using microservices and event-driven architecture for ingestion, indexing/retrieval, and chat orchestration, with RAG as a hard requirement and citations (title, page, link) embedded in answers. Use OpenRouter models (free allowed within limits) and only MARP PDFs as the knowledge source. Key Requirements (DoD highlights)
+## Vision
 
-- Answers must be supported by sources; show ≥1 citation in A1 and ≥2 citations in A2. If no source fits, say so explicitly.
+A production‑minded, networked system using **microservices** and **event‑driven architecture** for ingestion, indexing/retrieval, and chat orchestration, with **RAG** as a hard requirement and citations (title, page, link) embedded in answers. Use only MARP PDFs as the knowledge source (OpenRouter/compatible LLMs allowed within limits).
 
-- docker compose up must bring up all services; all inter-service comms happen over network protocols (HTTP or a message broker).
+## Definition of Done (module-aligned)
 
-- Scrum evidence must be documented: product goal/vision, backlog, sprint logs, and retrospective.
+- Answers must include citations (≥1 citation for A1; ≥2 for A2). If no suitable source exists, the system must say so explicitly.
+- `docker compose up` brings up all services; inter‑service comms over network protocols (HTTP/message broker).
+- Scrum evidence maintained in this README (or `/docs`) and GitHub (Issues/Projects/PRs).
