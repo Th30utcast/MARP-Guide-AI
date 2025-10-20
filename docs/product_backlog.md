@@ -47,7 +47,7 @@ Manage the live backlog on GitHub; keep this section as the readable overview.
 **Tier 1 Feature (choose ONE; record choice)**
 
 - Options: Chat history / Auth / Bookmarks / Doc management UI / Basic monitoring
-- **Chosen:** _<fill in>_
+- **Chosen:** _User Authentication & Session Management_
 
 **Tier 2 Feature (choose ONE; record choice)**
 
