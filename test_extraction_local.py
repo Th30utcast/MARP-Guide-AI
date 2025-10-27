@@ -2,6 +2,9 @@
 Local test script for DocumentExtracted event using your actual code.
 This simulates DocumentDiscovered events from test-pdfs/ and tests extraction.
 """
+"""
+Local test script for Extraction Service
+"""
 
 import json
 import time
@@ -13,11 +16,12 @@ from pathlib import Path
 from datetime import datetime, timezone
 import uuid
 
-# Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+# Add paths
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'C:\\Users\\user\\Desktop\\VS Code\\Uni\\Year 3\\MARP-Guide-AI\\common'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'C:\\Users\\user\\Desktop\\VS Code\\Uni\\Year 3\\MARP-Guide-AI\\services\\extraction'))
 
-from src.extraction.event_broker import RabbitMQEventBroker
-from src.extraction.extraction_service import ExtractionService
+from common.mq import RabbitMQEventBroker  # use explicit package path so static analyzers can resolve it
+from services.extraction.extraction_service import ExtractionService  # use explicit package path so static analyzers can resolve it
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 TEST_PDFS_DIR = "test-pdfs"
 
+# ... rest of your code stays the same
 #!! Delete this once tino makes the DocumentDiscovered event
 def create_document_discovered_event(file_path: str, title: str) -> dict:
     """Create a DocumentDiscovered event from a test PDF."""

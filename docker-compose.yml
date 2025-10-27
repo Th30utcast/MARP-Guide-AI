@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: marp-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - marp-network
+
+  extraction:
+    build:
+      context: ./services/extraction
+      dockerfile: Dockerfile
+    container_name: marp-extraction
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+    volumes:
+      - ./storage/extracted:/app/storage/extracted
+    networks:
+      - marp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  rabbitmq_data:
+
+networks:
+  marp-network:
+    driver: bridge
