@@ -16,8 +16,8 @@ import uuid
 # Add src directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from extraction.event_broker import RabbitMQEventBroker
-from extraction.extraction_service import ExtractionService
+from src.extraction.event_broker import RabbitMQEventBroker
+from src.extraction.extraction_service import ExtractionService
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 TEST_PDFS_DIR = "test-pdfs"
 
-
+#!! Delete this once tino makes the DocumentDiscovered event
 def create_document_discovered_event(file_path: str, title: str) -> dict:
     """Create a DocumentDiscovered event from a test PDF."""
     return {
