@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # RabbitMQ - Message broker for event-driven architecture
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: marp-rabbitmq
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI (http://localhost:15672, guest/guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - marp-network
+
+  # Ingestion Service - Discovers and fetches MARP PDFs
+  ingestion:
+    build: ./ingestion-service
+    container_name: marp-ingestion
+    ports:
+      - "8001:8000"
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
+      PDF_OUTPUT_DIR: /app/pdfs
+      MARP_URL: https://www.lancaster.ac.uk/academic-standards-and-quality/regulations-and-policies/manual-of-academic-regulations-and-procedures/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./shared-pdfs:/app/pdfs  # Shared storage for PDFs
+    networks:
+      - marp-network
+    restart: unless-stopped
+
+networks:
+  marp-network:
+    driver: bridge
+
+volumes:
+  shared-pdfs:
