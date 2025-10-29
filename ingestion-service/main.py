@@ -86,7 +86,7 @@ app = FastAPI(
 
 
 def create_document_discovered_event(document_id: str, title: str, url: str,
-                                     file_path: str, file_size: int, metadata: dict = None) -> dict:
+                                     file_path: str, file_size: int) -> dict:
     """Create a DocumentDiscovered event matching the expected schema."""
     return {
         "eventType": "DocumentDiscovered",
@@ -101,8 +101,7 @@ def create_document_discovered_event(document_id: str, title: str, url: str,
             "url": file_path,  # Local file path for Extraction to read
             "originalUrl": url,  # Original web URL for reference
             "discoveredAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "fileSize": file_size,
-            "metadata": metadata or {}
+            "fileSize": file_size
         }
     }
 
@@ -182,8 +181,7 @@ async def trigger_ingestion_auto():
                     title=pdf_info['title'],
                     url=pdf_info['url'],
                     file_path=fetch_result['file_path'],
-                    file_size=fetch_result['file_size'],
-                    metadata=fetch_result.get('metadata', {})
+                    file_size=fetch_result['file_size']
                 )
 
                 event_broker.publish(
@@ -265,8 +263,7 @@ async def trigger_ingestion():
                     title=pdf_info['title'],
                     url=pdf_info['url'],
                     file_path=fetch_result['file_path'],
-                    file_size=fetch_result['file_size'],
-                    metadata=fetch_result.get('metadata', {})
+                    file_size=fetch_result['file_size']
                 )
 
                 event_broker.publish(

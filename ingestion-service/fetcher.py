@@ -3,7 +3,6 @@ import requests
 import hashlib
 from pathlib import Path
 from typing import Optional, Dict
-import PyPDF2
 
 logger = logging.getLogger(__name__)
 
@@ -62,14 +61,10 @@ class PDFFetcher:
 
             logger.info(f"PDF downloaded successfully: {file_path} ({file_size} bytes)")
 
-            # Extract PDF metadata
-            pdf_metadata = self.extract_pdf_metadata(file_path)
-            
             return {
                 'file_path': str(file_path),
                 'file_size': file_size,
-                'checksum': checksum,
-                'metadata': pdf_metadata
+                'checksum': checksum
             }
 
         except requests.RequestException as e:
@@ -79,36 +74,6 @@ class PDFFetcher:
         except Exception as e:
             logger.error(f"Unexpected error downloading PDF: {str(e)}")
             return None
-
-    def extract_pdf_metadata(self, file_path: str) -> Dict:
-        """Extract metadata from PDF file."""
-        try:
-            with open(file_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                metadata = pdf_reader.metadata
-                
-                return {
-                    'title': metadata.get('/Title', 'Unknown') if metadata else 'Unknown',
-                    'author': metadata.get('/Author', 'Unknown') if metadata else 'Unknown',
-                    'subject': metadata.get('/Subject', 'Unknown') if metadata else 'Unknown',
-                    'creator': metadata.get('/Creator', 'Unknown') if metadata else 'Unknown',
-                    'producer': metadata.get('/Producer', 'Unknown') if metadata else 'Unknown',
-                    'creation_date': str(metadata.get('/CreationDate', 'Unknown')) if metadata else 'Unknown',
-                    'modification_date': str(metadata.get('/ModDate', 'Unknown')) if metadata else 'Unknown',
-                    'page_count': len(pdf_reader.pages)
-                }
-        except Exception as e:
-            logger.error(f"Error extracting PDF metadata from {file_path}: {e}")
-            return {
-                'title': 'Unknown',
-                'author': 'Unknown', 
-                'subject': 'Unknown',
-                'creator': 'Unknown',
-                'producer': 'Unknown',
-                'creation_date': 'Unknown',
-                'modification_date': 'Unknown',
-                'page_count': 0
-            }
 
     def file_exists(self, document_id: str) -> bool:
         """Check if PDF already exists locally."""
