@@ -12,3 +12,4 @@ Reliable, quickly accesible information with sources -- no hallucinations.
 - Properly cited (title, page number, and link)
 - Presented in an understanble manner
 - If no suitable source exists -> explicitly state "not certain / no source found"
+

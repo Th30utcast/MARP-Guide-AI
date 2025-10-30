@@ -1,0 +1,94 @@
+services:
+  # ============================================================================
+  # Shared RabbitMQ Message Broker
+  # ============================================================================
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: marp-rabbitmq
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI (http://localhost:15672, guest/guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - marp-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # Ingestion Service - Discovers and downloads MARP PDFs
+  # ============================================================================
+  ingestion:
+    build:
+      context: ./services/ingestion
+      dockerfile: Dockerfile
+    container_name: marp-ingestion
+    ports:
+      - "8001:8000"  # FastAPI endpoint
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
+      PDF_OUTPUT_DIR: /app/pdfs
+      STORAGE_PATH: /app/storage/extracted
+      MARP_URL: https://www.lancaster.ac.uk/academic-standards-and-quality/regulations-and-policies/manual-of-academic-regulations-and-procedures/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./pdfs:/app/pdfs  # Map to local filesystem for easy access
+      - ./storage/extracted:/app/storage/extracted  # Shared storage for metadata
+    networks:
+      - marp-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # Extraction Service - Extracts text from PDFs
+  # ============================================================================
+  extraction:
+    build:
+      context: .
+      dockerfile: services/extraction/Dockerfile
+    container_name: marp-extraction
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      PDF_INPUT_DIR: /app/pdfs  # Read from same location as Ingestion saves
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      ingestion:
+        condition: service_started  # Extraction should start after Ingestion
+    volumes:
+      - ./pdfs:/app/pdfs:ro  # Mount PDFs as read-only from local filesystem
+      - ./storage/extracted:/app/storage/extracted  # Extracted content storage
+    networks:
+      - marp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# ============================================================================
+# Shared Resources
+# ============================================================================
+volumes:
+  rabbitmq_data:
+    driver: local
+
+networks:
+  marp-network:
+    driver: bridge
