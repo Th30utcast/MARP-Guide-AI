@@ -82,11 +82,64 @@ services:
       retries: 3
       start_period: 40s
 
+  # ============================================================================
+  # Qdrant Vector Database - Stores embeddings for semantic search
+  # ============================================================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: marp-qdrant
+    ports:
+      - "6333:6333"  # HTTP API
+      - "6334:6334"  # gRPC (optional)
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - marp-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # Indexing Service - Chunks documents and generates embeddings
+  # ============================================================================
+  indexing:
+    build:
+      context: .
+      dockerfile: services/indexing/Dockerfile
+    container_name: marp-indexing
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      STORAGE_PATH: /app/storage/extracted
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      extraction:
+        condition: service_started
+      qdrant:
+        condition: service_started
+    volumes:
+      - ./storage/extracted:/app/storage/extracted
+      - ./pdfs:/app/pdfs:ro
+    networks:
+      - marp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 # ============================================================================
 # Shared Resources
 # ============================================================================
 volumes:
   rabbitmq_data:
+    driver: local
+  qdrant_data:
     driver: local
 
 networks:
