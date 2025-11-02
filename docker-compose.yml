@@ -133,6 +133,27 @@ services:
       retries: 3
       start_period: 60s
 
+  # ============================================================================
+  # Retrieval Service - Searches Qdrant for relevant document chunks
+  # ============================================================================
+  retrieval:
+    build:
+      context: ./services/retrieval
+      dockerfile: Dockerfile
+    container_name: marp-retrieval
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: marp-documents
+      EMBEDDING_MODEL: all-MiniLM-L6-v2
+    depends_on:
+      qdrant:
+        condition: service_started
+    ports:
+      - "8002:8002"   # Expose FastAPI endpoint
+    networks:
+      - marp-network
+    restart: unless-stopped
+
 # ============================================================================
 # Shared Resources
 # ============================================================================
