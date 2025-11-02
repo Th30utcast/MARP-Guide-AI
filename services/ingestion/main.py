@@ -2,6 +2,7 @@ import os
 import logging
 import uuid
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
@@ -9,9 +10,12 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse, unquote
 
+# Add parent directory to path for common imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
 from scraper import MARPScraper
 from fetcher import PDFFetcher
-from event_broker import RabbitMQEventBroker
+from common.mq import RabbitMQEventBroker
 
 # Configure logging
 logging.basicConfig(
@@ -53,8 +57,25 @@ async def lifespan(app: FastAPI):
             username=RABBITMQ_USER,
             password=RABBITMQ_PASS
         )
-        event_broker.connect()
+        # Common broker auto-connects in __init__
         logger.info("✅ Connected to RabbitMQ")
+
+        # Declare queues and exchange
+        event_broker.declare_queue("documents.discovered")
+
+        if event_broker.channel:
+            event_broker.channel.exchange_declare(
+                exchange="events",
+                exchange_type="topic",
+                durable=True
+            )
+            event_broker.channel.queue_bind(
+                exchange="events",
+                queue="documents.discovered",
+                routing_key="documents.discovered"
+            )
+        logger.info("✅ Queues and exchange configured")
+
     except Exception as e:
         logger.error(f"❌ Failed to connect to RabbitMQ: {str(e)}")
         raise
@@ -263,7 +284,7 @@ async def trigger_ingestion_auto():
 
                 event_broker.publish(
                     routing_key="documents.discovered",
-                    message=event,
+                    message=json.dumps(event),
                     exchange="events"
                 )
 
@@ -371,7 +392,7 @@ async def trigger_ingestion():
 
                 event_broker.publish(
                     routing_key="documents.discovered",
-                    message=event,
+                    message=json.dumps(event),
                     exchange="events"
                 )
 
