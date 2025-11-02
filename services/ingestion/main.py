@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 from scraper import MARPScraper
 from fetcher import PDFFetcher
 from common.mq import RabbitMQEventBroker
+from common.events import create_document_discovered_event
 
 # Configure logging
 logging.basicConfig(
@@ -136,11 +137,14 @@ def extract_document_id_from_url(url: str) -> str:
     return document_id
 
 
-def save_discovered_event(document_id: str, title: str, url: str,
-                         discovered_at: str, file_size: int, original_url: str,
-                         event_id: str, correlation_id: str):
+def save_discovered_event(document_id: str, event: dict):
     """
-    Save the complete DocumentDiscovered event to discovered.json.
+    Save the DocumentDiscovered event to discovered.json (event sourcing pattern).
+    Saves the exact same event that will be published to RabbitMQ.
+
+    Args:
+        document_id: Document identifier
+        event: The complete event dictionary to save
     """
     try:
         # Create document directory in storage
@@ -148,28 +152,10 @@ def save_discovered_event(document_id: str, title: str, url: str,
         doc_dir = storage_path / document_id
         doc_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create complete DocumentDiscovered event
-        discovered_event = {
-            "eventType": "DocumentDiscovered",
-            "eventId": event_id,
-            "timestamp": discovered_at,
-            "correlationId": correlation_id,
-            "source": "ingestion-service",
-            "version": "1.0",
-            "payload": {
-                "documentId": document_id,
-                "title": title,
-                "url": url,  # Local file path
-                "originalUrl": original_url,  # Web URL
-                "discoveredAt": discovered_at,
-                "fileSize": file_size
-            }
-        }
-
         # Save discovered.json (event-sourced)
         discovered_path = doc_dir / "discovered.json"
         with open(discovered_path, 'w', encoding='utf-8') as f:
-            json.dump(discovered_event, f, indent=2, ensure_ascii=False)
+            json.dump(event, f, indent=2, ensure_ascii=False)
 
         logger.info(f"💾 Saved DocumentDiscovered event to: {discovered_path}")
 
@@ -247,40 +233,17 @@ async def trigger_ingestion_auto():
 
                 fetched_count += 1
 
-                # Generate event metadata
-                event_id = str(uuid.uuid4())
-                correlation_id = str(uuid.uuid4())
-                discovered_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-                # Save DocumentDiscovered event to discovered.json (event-sourced)
-                save_discovered_event(
+                # Create DocumentDiscovered event using helper function
+                event = create_document_discovered_event(
                     document_id=document_id,
                     title=pdf_info['title'],
                     url=fetch_result['file_path'],  # Local file path for Extraction
-                    discovered_at=discovered_at,
                     file_size=fetch_result['file_size'],
-                    original_url=pdf_info['url'],  # Original web URL for reference
-                    event_id=event_id,
-                    correlation_id=correlation_id
+                    original_url=pdf_info['url']  # Original web URL for reference
                 )
 
-                # Create and publish DocumentDiscovered event to RabbitMQ
-                event = {
-                    "eventType": "DocumentDiscovered",
-                    "eventId": event_id,
-                    "timestamp": discovered_at,
-                    "correlationId": correlation_id,
-                    "source": "ingestion-service",
-                    "version": "1.0",
-                    "payload": {
-                        "documentId": document_id,
-                        "title": pdf_info['title'],
-                        "url": fetch_result['file_path'],  # Local file path
-                        "originalUrl": pdf_info['url'],  # Web URL
-                        "discoveredAt": discovered_at,
-                        "fileSize": fetch_result['file_size']
-                    }
-                }
+                # Save DocumentDiscovered event to discovered.json (event-sourced)
+                save_discovered_event(document_id, event)
 
                 event_broker.publish(
                     routing_key="documents.discovered",
@@ -355,40 +318,17 @@ async def trigger_ingestion():
 
                 fetched_count += 1
 
-                # Generate event metadata
-                event_id = str(uuid.uuid4())
-                correlation_id = str(uuid.uuid4())
-                discovered_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-                # Save DocumentDiscovered event to discovered.json (event-sourced)
-                save_discovered_event(
+                # Create DocumentDiscovered event using helper function
+                event = create_document_discovered_event(
                     document_id=document_id,
                     title=pdf_info['title'],
-                    url=fetch_result['file_path'],  
-                    discovered_at=discovered_at,
+                    url=fetch_result['file_path'],  # Local file path for Extraction
                     file_size=fetch_result['file_size'],
-                    original_url=pdf_info['url'],  #! NOTE: Original web URL for reference
-                    event_id=event_id,
-                    correlation_id=correlation_id
+                    original_url=pdf_info['url']  # Original web URL for reference
                 )
 
-                # Create and publish DocumentDiscovered event to RabbitMQ
-                event = {
-                    "eventType": "DocumentDiscovered",
-                    "eventId": event_id,
-                    "timestamp": discovered_at,
-                    "correlationId": correlation_id,
-                    "source": "ingestion-service",
-                    "version": "1.0",
-                    "payload": {
-                        "documentId": document_id,
-                        "title": pdf_info['title'],
-                        "url": fetch_result['file_path'],  
-                        "originalUrl": pdf_info['url'],  
-                        "discoveredAt": discovered_at,
-                        "fileSize": fetch_result['file_size']
-                    }
-                }
+                # Save DocumentDiscovered event to discovered.json (event-sourced)
+                save_discovered_event(document_id, event)
 
                 event_broker.publish(
                     routing_key="documents.discovered",
