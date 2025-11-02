@@ -27,8 +27,8 @@ services:
   # ============================================================================
   ingestion:
     build:
-      context: ./services/ingestion
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/ingestion/Dockerfile
     container_name: marp-ingestion
     ports:
       - "8001:8000"  # FastAPI endpoint
