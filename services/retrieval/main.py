@@ -1,7 +1,7 @@
 import os, time
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List
 from retrieval_service import load_model, get_qdrant, embed, vector_search
 
 # Environment configuration
@@ -10,7 +10,7 @@ QDRANT_URL        = os.getenv("QDRANT_URL", "http://qdrant:6333")
 QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "marp-documents")
 
 # FastAPI setup
-app = FastAPI(title="Retrieval Service", version="1.1.0")
+app = FastAPI(title="Retrieval Service", version="1.1.1")
 
 # Schemas
 class SearchRequest(BaseModel):
@@ -29,7 +29,7 @@ class SearchResult(BaseModel):
 class SearchResponse(BaseModel):
     query: str
     results: List[SearchResult]
-    correlation_id: Optional[str] = None
+
 
 # Load model and client once
 model = load_model(EMBEDDING_MODEL)
@@ -40,16 +40,17 @@ qdrant = get_qdrant(QDRANT_URL)
 def health():
     try:
         qdrant.get_collection(QDRANT_COLLECTION)
-        return {"status": "ok", "model": EMBEDDING_MODEL, "collection": QDRANT_COLLECTION}
+        return {
+            "status": "ok",
+            "model": EMBEDDING_MODEL,
+            "collection": QDRANT_COLLECTION
+        }
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e))
 
 # Search endpoint
 @app.post("/search", response_model=SearchResponse)
-def search(
-    req: SearchRequest,
-    x_correlation_id: Optional[str] = Header(None)
-):
+def search(req: SearchRequest):
     start = time.time()
 
     try:
@@ -59,11 +60,17 @@ def search(
         raise HTTPException(status_code=500, detail=f"Search failed: {e}")
 
     results = []
+    seen_texts = set()
     for hit in hits:
         payload = hit.payload or {}
+        text = payload.get("text", "").strip()
 
-        # Defensive trimming for very long texts
-        text = payload.get("text", "")
+        # Avoid duplicates
+        if text in seen_texts:
+            continue
+        seen_texts.add(text)
+
+        # Trim very long texts
         if len(text) > 800:
             text = text[:800] + "…"
 
@@ -77,11 +84,10 @@ def search(
             score=float(hit.score)
         ))
 
-    latency = round((time.time() - start) * 1000, 2)
-    print(f"[Retrieval] {len(results)} results | latency: {latency}ms | corr_id: {x_correlation_id or '-'}")
+        if len(results) >= req.top_k:
+            break
 
-    return SearchResponse(
-        query=req.query,
-        results=results,
-        correlation_id=x_correlation_id
-    )
+    latency = round((time.time() - start) * 1000, 2)
+    print(f"[Retrieval] {len(results)} results | latency: {latency}ms")
+
+    return SearchResponse(query=req.query, results=results)
