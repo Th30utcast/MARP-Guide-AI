@@ -24,7 +24,7 @@ import pdfplumber
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from common.events import create_document_extracted_event
+from common.events import create_document_extracted_event, create_extraction_failed_event
 
 logger = logging.getLogger(__name__)
 
@@ -256,11 +256,11 @@ class ExtractionService:
         """
         Publish a DocumentExtracted event to the message broker. Returns True if the DocumentExtracted event was published successfully.
         """
-        
+
         if not self.event_broker:
             logger.warning("Event broker not configured. Event not published.")
             return False
-        
+
         try:
             self.event_broker.publish(
                 routing_key="documents.extracted",
@@ -273,8 +273,49 @@ class ExtractionService:
             logger.error(f"Failed to publish event: {e}")
             return False
 
+    def _publish_extraction_failed_event(
+        self,
+        document_id: str,
+        correlation_id: str,
+        error_message: str,
+        error_type: str = "ExtractionError"
+    ) -> bool:
+        """
+        Publish an ExtractionFailed event to the message broker for monitoring.
+        Returns True if the event was published successfully.
+        """
+
+        if not self.event_broker:
+            logger.warning("Event broker not configured. ExtractionFailed event not published.")
+            return False
+
+        try:
+            logger.info(f"Publishing ExtractionFailed event for document {document_id}")
+
+            # Create ExtractionFailed event using common helper
+            event = create_extraction_failed_event(
+                document_id=document_id,
+                correlation_id=correlation_id,
+                error_message=error_message,
+                error_type=error_type
+            )
+
+            # Publish to RabbitMQ
+            self.event_broker.publish(
+                routing_key="documents.extraction.failed",
+                message=json.dumps(event),
+                exchange="events"
+            )
+
+            logger.info(f"ExtractionFailed event published for document {document_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error publishing ExtractionFailed event: {str(e)}", exc_info=True)
+            return False
+
     def handle_document_discovered_event(
-        self, 
+        self,
         event: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         """
@@ -288,6 +329,19 @@ class ExtractionService:
             return document_extracted_event
         except Exception as e:
             logger.error(f"Error handling DocumentDiscovered event: {e}")
+
+            # Publish ExtractionFailed event for monitoring
+            payload = event.get("payload", {})
+            document_id = payload.get("documentId", "unknown")
+            correlation_id = event.get("correlationId", "unknown")
+
+            self._publish_extraction_failed_event(
+                document_id=document_id,
+                correlation_id=correlation_id,
+                error_message=str(e),
+                error_type=type(e).__name__
+            )
+
             return None
 
 

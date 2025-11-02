@@ -26,24 +26,38 @@ def create_document_discovered_event(
     title: str,
     url: str,
     file_size: int,
-    correlation_id: Optional[str] = None
+    correlation_id: Optional[str] = None,
+    original_url: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Create a DocumentDiscovered event.
-    
+
     Published by: Ingestion Service
     Consumed by: Extraction Service
-    
+
     Args:
         document_id: Unique document identifier
         title: Document title
-        url: URL or path to the PDF
+        url: URL or path to the PDF (local file path)
         file_size: Size of the PDF in bytes
         correlation_id: Optional correlation ID (generated if not provided)
-    
+        original_url: Optional original web URL (if url is a local path)
+
     Returns:
         DocumentDiscovered event dictionary
     """
+    payload = {
+        "documentId": document_id,
+        "title": title,
+        "url": url,
+        "discoveredAt": get_utc_timestamp(),
+        "fileSize": file_size
+    }
+
+    # Add originalUrl if provided
+    if original_url:
+        payload["originalUrl"] = original_url
+
     return {
         "eventType": "DocumentDiscovered",
         "eventId": generate_event_id(),
@@ -51,13 +65,7 @@ def create_document_discovered_event(
         "correlationId": correlation_id or generate_event_id(),
         "source": "ingestion-service",
         "version": "1.0",
-        "payload": {
-            "documentId": document_id,
-            "title": title,
-            "url": url,
-            "discoveredAt": get_utc_timestamp(),
-            "fileSize": file_size
-        }
+        "payload": payload
     }
 
 
