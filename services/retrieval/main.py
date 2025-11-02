@@ -1,25 +1,26 @@
-# services/retrieval/main.py
 import os, time
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 from retrieval_service import load_model, get_qdrant, embed, vector_search
 
-# --- Config (env with sensible defaults) ---
+# Environment configuration
 EMBEDDING_MODEL   = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 QDRANT_URL        = os.getenv("QDRANT_URL", "http://qdrant:6333")
 QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "marp-documents")
 
-# --- FastAPI setup ---
-app = FastAPI(title="Retrieval Service", version="1.0.0")
+# FastAPI setup
+app = FastAPI(title="Retrieval Service", version="1.1.0")
 
-# --- Schemas ---
+# Schemas
 class SearchRequest(BaseModel):
     query: str
     top_k: int = Field(5, ge=1, le=20, description="Number of results to return")
 
 class SearchResult(BaseModel):
     text: str
+    document_id: str
+    chunk_index: int
     title: str
     page: int
     url: str
@@ -28,42 +29,59 @@ class SearchResult(BaseModel):
 class SearchResponse(BaseModel):
     query: str
     results: List[SearchResult]
+    correlation_id: Optional[str] = None
 
-# --- Singletons (load once) ---
+# Load model and client once
 model = load_model(EMBEDDING_MODEL)
 qdrant = get_qdrant(QDRANT_URL)
 
-# --- Health ---
+# Health check
 @app.get("/health")
 def health():
     try:
-        # Will raise if collection missing / Qdrant not reachable
         qdrant.get_collection(QDRANT_COLLECTION)
         return {"status": "ok", "model": EMBEDDING_MODEL, "collection": QDRANT_COLLECTION}
     except Exception as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-# --- Search ---
+# Search endpoint
 @app.post("/search", response_model=SearchResponse)
-def search(req: SearchRequest):
-    t0 = time.time()
+def search(
+    req: SearchRequest,
+    x_correlation_id: Optional[str] = Header(None)
+):
+    start = time.time()
+
     try:
-        qvec = embed(model, req.query)
-        hits = vector_search(qdrant, QDRANT_COLLECTION, qvec, req.top_k)
+        query_vec = embed(model, req.query)
+        hits = vector_search(qdrant, QDRANT_COLLECTION, query_vec, req.top_k)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {e}")
 
-    results: List[SearchResult] = []
-    for h in hits:
-        payload = h.payload or {}
+    results = []
+    for hit in hits:
+        payload = hit.payload or {}
+
+        # Defensive trimming for very long texts
+        text = payload.get("text", "")
+        if len(text) > 800:
+            text = text[:800] + "…"
+
         results.append(SearchResult(
-            text = payload.get("text", ""),
-            title= payload.get("title", ""),
-            page = int(payload.get("page", 0)),
-            url  = payload.get("url", ""),
-            score= float(h.score),
+            text=text,
+            document_id=str(payload.get("document_id", "")),
+            chunk_index=int(payload.get("chunk_index", 0)),
+            title=payload.get("title", ""),
+            page=int(payload.get("page", 0)),
+            url=payload.get("url", ""),
+            score=float(hit.score)
         ))
 
-    # (Optional later) log latency, top score, etc.
-    _latency_ms = int((time.time() - t0) * 1000)
-    return SearchResponse(query=req.query, results=results)
+    latency = round((time.time() - start) * 1000, 2)
+    print(f"[Retrieval] {len(results)} results | latency: {latency}ms | corr_id: {x_correlation_id or '-'}")
+
+    return SearchResponse(
+        query=req.query,
+        results=results,
+        correlation_id=x_correlation_id
+    )
