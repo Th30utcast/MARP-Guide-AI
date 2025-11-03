@@ -30,12 +30,16 @@ import json
 import logging
 import time
 from typing import List, Dict, Any
-from datetime import datetime
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
-from common.events import create_chunks_indexed_event, create_indexing_failed_event
+from common.events import (
+    create_chunks_indexed_event,
+    create_indexing_failed_event,
+    ROUTING_KEY_INDEXED,
+    ROUTING_KEY_INDEXING_FAILED
+)
 from common.mq import RabbitMQEventBroker
 
 # Set up logging so we can see what's happening
@@ -513,7 +517,7 @@ class IndexingService:
         # Publish the event to RabbitMQ
         # Other services listening to "documents.indexed" will receive this
         self.event_broker.publish(
-            routing_key="documents.indexed",
+            routing_key=ROUTING_KEY_INDEXED,
             message=json.dumps(event)
         )
 
@@ -549,7 +553,7 @@ class IndexingService:
 
             # Publish to RabbitMQ
             self.event_broker.publish(
-                routing_key="documents.indexing.failed",
+                routing_key=ROUTING_KEY_INDEXING_FAILED,
                 message=json.dumps(event)
             )
 

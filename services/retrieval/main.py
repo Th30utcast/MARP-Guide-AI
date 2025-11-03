@@ -134,7 +134,7 @@ def search(req: SearchRequest):
             break
 
     latency = round((time.time() - start) * 1000, 2)
-    print(f"[Retrieval] {len(results)} results | latency: {latency}ms")
+    logger.info(f"🔍 Retrieved {len(results)} results | latency: {latency}ms")
 
     # Publish RetrievalCompleted (best-effort; ignore failures)
     if _broker is not None:

@@ -1,7 +1,7 @@
 import json
 import pika
 import logging
-from typing import Optional
+from typing import Optional, Callable, Any
 
 logger = logging.getLogger(__name__)
 
@@ -96,15 +96,15 @@ class RabbitMQEventBroker:
     def consume(
         self,
         queue_name: str,
-        callback,
+        callback: Callable[[Any, Any, Any, bytes], None],
         auto_ack: bool = False
     ):
         """
         Consume messages from a queue.
-        
+
         Args:
             queue_name: Queue to consume from
-            callback: Callback function for each message
+            callback: Callback function (ch, method, properties, body) -> None
             auto_ack: Whether to auto-acknowledge messages
         """
         if not self.channel:

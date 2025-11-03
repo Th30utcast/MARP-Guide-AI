@@ -327,19 +327,6 @@ def create_retrieval_completed_event(
     }
 
 # ============================================================================
-# Event Type Constants (for consistency)
-# ============================================================================
-
-EVENT_DOCUMENT_DISCOVERED = "DocumentDiscovered"
-EVENT_DOCUMENT_EXTRACTED = "DocumentExtracted"
-EVENT_CHUNKS_INDEXED = "ChunksIndexed"
-EVENT_INGESTION_FAILED = "IngestionFailed"
-EVENT_EXTRACTION_FAILED = "ExtractionFailed"
-EVENT_INDEXING_FAILED = "IndexingFailed"
-EVENT_RETRIEVAL_COMPLETED = "RetrievalCompleted"
-
-
-# ============================================================================
 # RabbitMQ Routing Keys (for consistency)
 # ============================================================================
 
@@ -350,57 +337,3 @@ ROUTING_KEY_INGESTION_FAILED = "documents.ingestion.failed"
 ROUTING_KEY_EXTRACTION_FAILED = "documents.extraction.failed"
 ROUTING_KEY_INDEXING_FAILED = "documents.indexing.failed"
 ROUTING_KEY_RETRIEVAL_COMPLETED = "retrieval.completed"
-
-
-# ============================================================================
-# Validation Functions
-# ============================================================================
-
-def validate_event_structure(event: Dict[str, Any]) -> bool:
-    """
-    Validate that an event has the required structure.
-    
-    Args:
-        event: Event dictionary to validate
-    
-    Returns:
-        True if valid, False otherwise
-    """
-    required_fields = ["eventType", "eventId", "timestamp", "correlationId", "source", "version", "payload"]
-    
-    for field in required_fields:
-        if field not in event:
-            return False
-    
-    # Check that IDs are UUIDs (basic check)
-    if not isinstance(event["eventId"], str) or len(event["eventId"]) < 32:
-        return False
-    
-    return True
-
-
-def extract_correlation_id(event: Dict[str, Any]) -> Optional[str]:
-    """
-    Safely extract correlation ID from an event.
-    
-    Args:
-        event: Event dictionary
-    
-    Returns:
-        Correlation ID if found, None otherwise
-    """
-    return event.get("correlationId")
-
-
-def extract_document_id(event: Dict[str, Any]) -> Optional[str]:
-    """
-    Safely extract document ID from an event's payload.
-    
-    Args:
-        event: Event dictionary
-    
-    Returns:
-        Document ID if found, None otherwise
-    """
-    payload = event.get("payload", {})
-    return payload.get("documentId")
