@@ -107,7 +107,14 @@ def start_health_server(broker, port=8080):
     health_thread.start()
 
 def process_document_discovered(ch, method, properties, body):
-    #! Callback for processing DocumentDiscovered events.
+    """
+    Callback for processing DocumentDiscovered events.
+
+    Resilience Strategy:
+    - Failed extractions publish ExtractionFailed events for monitoring
+    - Messages are always acknowledged (removed from queue) to prevent infinite loops
+    - Processing continues with next document even if current one fails
+    """
     try:
         # Decode the message body
         event = json.loads(body)
@@ -122,23 +129,32 @@ def process_document_discovered(ch, method, properties, body):
         
         # Process the event
         result = extraction_service.handle_document_discovered_event(event)
-        
+
         if result:
             logger.info(f"✅ Processed: {result['payload']['documentId']}")
             ch.basic_ack(delivery_tag=method.delivery_tag)
         else:
-            logger.error("❌ Processing failed, requeuing...")
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            # Extraction failed, but failure event was already published
+            # Acknowledge message to remove from queue and continue processing
+            logger.warning(f"⚠️ Processing failed for {event['payload']['documentId']}, but continuing...")
+            ch.basic_ack(delivery_tag=method.delivery_tag)
             
     except json.JSONDecodeError as e:
         logger.error(f"❌ JSON parsing error: {e}")
         logger.error(f"Body content: {body}")
+        # Don't requeue malformed messages - acknowledge to remove from queue
+        logger.warning("⚠️ Malformed message, acknowledging to skip...")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
-        # Don't requeue malformed messages
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+    except KeyboardInterrupt:
+        # Allow graceful shutdown
+        raise
+
     except Exception as e:
-        logger.error(f"❌ Error: {str(e)}", exc_info=True)
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        logger.error(f"❌ Unexpected error in worker: {str(e)}", exc_info=True)
+        # For unexpected worker errors, acknowledge to prevent infinite loop
+        logger.warning("⚠️ Unexpected error, acknowledging to continue processing...")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
 if __name__ == "__main__":
     logger.info("🚀 Initializing Extraction Service Worker...")
