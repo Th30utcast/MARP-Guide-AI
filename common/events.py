@@ -75,7 +75,8 @@ def create_document_extracted_event(
     page_count: int,
     text_extracted: bool,
     pdf_metadata: Dict[str, Any],
-    extraction_method: str = "pdfplumber"
+    extraction_method: str = "pdfplumber",
+    url: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Create a DocumentExtracted event.
@@ -90,10 +91,24 @@ def create_document_extracted_event(
         text_extracted: Whether text was successfully extracted
         pdf_metadata: PDF's internal metadata (title, author, year, subject, etc.)
         extraction_method: Method used for extraction (default: pdfplumber)
+        url: Optional original URL to the source document
 
     Returns:
         DocumentExtracted event dictionary
     """
+    payload = {
+        "documentId": document_id,
+        "textExtracted": text_extracted,
+        "pageCount": page_count,
+        "metadata": pdf_metadata,  # PDF's internal metadata
+        "extractedAt": get_utc_timestamp(),
+        "extractionMethod": extraction_method
+    }
+
+    # Add URL if provided
+    if url:
+        payload["url"] = url
+
     return {
         "eventType": "DocumentExtracted",
         "eventId": generate_event_id(),
@@ -101,14 +116,7 @@ def create_document_extracted_event(
         "correlationId": correlation_id,
         "source": "extraction-service",
         "version": "1.0",
-        "payload": {
-            "documentId": document_id,
-            "textExtracted": text_extracted,
-            "pageCount": page_count,
-            "metadata": pdf_metadata,  # PDF's internal metadata
-            "extractedAt": get_utc_timestamp(),
-            "extractionMethod": extraction_method
-        }
+        "payload": payload
     }
 
 

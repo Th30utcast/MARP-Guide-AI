@@ -216,7 +216,7 @@ class IndexingService:
             # STEP 2: Get metadata from the event (we'll attach this to each chunk)
             doc_metadata = event["payload"]["metadata"]
             doc_title = doc_metadata.get("title", "Unknown")
-            doc_url = doc_metadata.get("url", "")
+            doc_url = event["payload"].get("url", "")
 
             # STEP 3: Chunk each page
             # We loop through each page and break it into chunks

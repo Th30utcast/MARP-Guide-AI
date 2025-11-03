@@ -58,6 +58,7 @@ class ExtractionService:
         document_id = payload.get("documentId")
         url = payload.get("url")
         title = payload.get("title", "Unknown")
+        original_url = payload.get("originalUrl", "")
         correlation_id = document_discovered_event.get("correlationId")
 
         try:
@@ -75,7 +76,8 @@ class ExtractionService:
             document_extracted_event = self._build_document_extracted_event(
                 document_id=document_id,
                 correlation_id=correlation_id,
-                extracted_data=extracted_data
+                extracted_data=extracted_data,
+                original_url=original_url
             )
             
             logger.info(f"Successfully extracted document: {document_id}")
@@ -237,19 +239,21 @@ class ExtractionService:
         self,
         document_id: str,
         correlation_id: str,
-        extracted_data: Dict[str, Any]
+        extracted_data: Dict[str, Any],
+        original_url: str = ""
     ) -> Dict[str, Any]:
         """
         Build the DocumentExtracted event for RabbitMQ using the common helper function.
         """
-        
+
         return create_document_extracted_event(
             document_id=document_id,
             correlation_id=correlation_id,
             page_count=extracted_data["page_count"],
             text_extracted=extracted_data["text_extracted"],
             pdf_metadata=extracted_data["metadata"],
-            extraction_method=extracted_data["extraction_method"]
+            extraction_method=extracted_data["extraction_method"],
+            url=original_url
         )
 
     def publish_event(self, event: Dict[str, Any]) -> bool:
