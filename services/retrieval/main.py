@@ -59,6 +59,24 @@ try:
         password=RABBITMQ_PASSWORD,
     )
     logger.info("✅ RabbitMQ broker connected successfully")
+
+    # Auto-declare exchange, queue, and binding for retrieval.completed (best-effort)
+    try:
+        if _broker.channel:
+            _broker.channel.exchange_declare(
+                exchange="events",
+                exchange_type="topic",
+                durable=True
+            )
+            _broker.channel.queue_declare(queue="retrieval.completed", durable=True)
+            _broker.channel.queue_bind(
+                exchange="events",
+                queue="retrieval.completed",
+                routing_key=ROUTING_KEY_RETRIEVAL_COMPLETED
+            )
+            logger.info("✅ Declared queue 'retrieval.completed' and bound to exchange 'events'")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to auto-declare retrieval queue/binding: {e}")
 except Exception as e:
     logger.warning(f"⚠️ RabbitMQ broker not available: {e}. Events will not be published.")
     _broker = None
