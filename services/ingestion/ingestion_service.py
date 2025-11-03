@@ -434,9 +434,12 @@ class IngestionService:
             logger.info(f"✅ Discovered {len(discovered_pdfs)} PDFs")
 
             # Step 2 & 3: Fetch PDFs and publish events
+            # Resilience: Continue processing all PDFs even if some fail
+            # Failed items are logged and tracked via failure events
             fetched_count = 0
             published_count = 0
             skipped_count = 0
+            failed_count = 0
 
             for pdf_info in discovered_pdfs:
                 result = self._process_pdf(pdf_info)
@@ -447,10 +450,14 @@ class IngestionService:
                         published_count += 1
                     elif result["status"] == "skipped":
                         skipped_count += 1
+                else:
+                    # Failed to process (failure event already published)
+                    failed_count += 1
+                    logger.warning(f"⚠️ Failed to process: {pdf_info.get('title', 'Unknown')}")
 
             logger.info(
                 f"🎉 Ingestion completed: {fetched_count} fetched, "
-                f"{published_count} events published, {skipped_count} skipped"
+                f"{published_count} events published, {skipped_count} skipped, {failed_count} failed"
             )
 
             return {
@@ -459,7 +466,8 @@ class IngestionService:
                 "discovered": len(discovered_pdfs),
                 "fetched": fetched_count,
                 "published": published_count,
-                "skipped": skipped_count
+                "skipped": skipped_count,
+                "failed": failed_count
             }
 
         except Exception as e:
