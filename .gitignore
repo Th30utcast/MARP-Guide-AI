@@ -1,9 +1,8 @@
-CLAUDE.md
-assesment_description.pdf
 .DS_Store
 __pycache__/
 *.pyc
-pdfs/
 .env
 *.log
+CLAUDE.md
 storage/
+pdfs/

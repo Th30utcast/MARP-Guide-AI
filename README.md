@@ -16,7 +16,90 @@ A Retrieval-Augmented Generation (RAG) chatbot that answers questions about Lanc
 
 ## Architecture
 
-This system uses a **microservices architecture** with **event-driven communication** via RabbitMQ:
+This system uses a **microservices architecture** with **event-driven communication** via RabbitMQ.
+
+### High-Level Architecture Overview
+
+```mermaid
+graph TB
+  subgraph Users["User Layer"]
+    Student[Students]
+    Staff[Staff]
+  end
+
+  subgraph Presentation["Presentation Layer"]
+    WebUI[Web UI<br/>]
+    Auth[Authentication Service<br/>]
+  end
+
+  subgraph Application["Application Layer"]
+    Chat[Chat Service<br/>]
+    Retrieval[Retrieval Service<br/>]
+    MultiModel[Multi-Model Comparison<br/>]
+  end
+
+  subgraph DataProcessing["Data Processing Layer"]
+    Ingestion[Ingestion Service<br/>]
+    Extraction[Extraction Service<br/>]
+    Indexing[Indexing Service<br/>]
+  end
+
+  subgraph Infrastructure["Infrastructure Layer"]
+    Message-Broker[Message Broker<br/>]
+    Vector-Database[(Vector Database<br/>)]
+    Storage[(File Storage<br/>)]
+    Database[(Database<br/>)]
+  end
+
+  subgraph External["External Systems"]
+    MARP[Lancaster MARP<br/>]
+    LLMs[LLM APIs<br/>]
+  end
+
+  %% User interactions
+  Student --> WebUI
+  Staff --> WebUI
+  WebUI --> Auth
+  Auth -->Database
+
+  %% Application layer flows
+  WebUI --> Chat
+  Chat --> MultiModel
+  Chat --> Retrieval
+  MultiModel --> LLMs
+  Retrieval --> Vector-Database
+
+  %% Data processing pipeline (operational)
+  MARP -->|Scrape PDFs| Ingestion
+  Ingestion -->|DocumentDiscovered| Message-Broker
+  Message-Broker -->|Event| Extraction
+  Extraction -->|DocumentExtracted| Message-Broker
+  Message-Broker -->|Event| Indexing
+  Indexing -->|Store Vectors| Vector-Database
+
+  %% Storage connections
+  Ingestion --> Storage
+  Extraction --> Storage
+  Indexing --> Storage
+
+  %% Styling
+  style DataProcessing fill:#00A310,stroke:#333,stroke-width:2px
+  style Infrastructure fill:#A3A300,stroke:#333,stroke-width:2px
+  style Presentation fill:#808080,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+  style Application fill:#808080,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+  style External fill:#003BD1,stroke:#333,stroke-width:2px
+  style Users fill:#FF6B6B,stroke:#333,stroke-width:2px
+```
+
+**Legend:**
+
+- ✅ **Green** - Operational (Data Processing Pipeline)
+- **Yellow** - Infrastructure (Always-on services)
+- 🚧 **Gray Dashed** - Planned Features (Tier 1 & 2)
+- **Blue** - External Systems
+- **Red** - End Users
+
+### Components
 
 1. **Ingestion Service** - Discovers and downloads MARP PDFs from Lancaster's website
 2. **Extraction Service** - Extracts text and metadata from PDFs using pdfplumber
@@ -48,7 +131,7 @@ For detailed architecture diagrams, see:
 1. **Clone the repository**:
 
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/Th30utcast/MARP-Guide-AI.git
    cd MARP-Guide-AI
    ```
 
@@ -349,3 +432,54 @@ docker compose logs ingestion
    docker compose logs extraction
    docker compose logs indexing
    ```
+
+## Technology Stack
+
+### Core Infrastructure
+
+| Technology         | Version         | Purpose                                      |
+| ------------------ | --------------- | -------------------------------------------- |
+| **Docker**         | Latest          | Containerization platform                    |
+| **Docker Compose** | Latest          | Multi-container orchestration                |
+| **RabbitMQ**       | 3.12-management | Message broker for event-driven architecture |
+| **Qdrant**         | Latest          | Vector database for semantic search          |
+
+### Ingestion Service
+
+| Technology         | Version | Purpose                                  |
+| ------------------ | ------- | ---------------------------------------- |
+| **FastAPI**        | 0.104.1 | Modern Python web framework for REST API |
+| **Uvicorn**        | 0.24.0  | ASGI server for FastAPI                  |
+| **BeautifulSoup4** | 4.12.2  | HTML parsing and web scraping            |
+| **lxml**           | 5.0.0+  | XML/HTML parser for BeautifulSoup        |
+| **Requests**       | 2.31.0  | HTTP client for downloading PDFs         |
+| **Pika**           | 1.3.2   | RabbitMQ client for Python               |
+
+### Extraction Service
+
+| Technology     | Version | Purpose                              |
+| -------------- | ------- | ------------------------------------ |
+| **pdfplumber** | 0.10.3  | PDF text extraction library          |
+| **Pika**       | 1.3.2   | RabbitMQ client for consuming events |
+
+### Indexing Service
+
+| Technology                | Version | Purpose                                  |
+| ------------------------- | ------- | ---------------------------------------- |
+| **sentence-transformers** | 3.0.0+  | Generate semantic embeddings             |
+| **qdrant-client**         | 1.7.0   | Python client for Qdrant vector database |
+| **NumPy**                 | 1.24.3  | Numerical computations for vectors       |
+| **Pika**                  | 1.3.2   | RabbitMQ client for consuming events     |
+
+### Embedding Model
+
+- **Model**: `all-MiniLM-L6-v2` (from sentence-transformers)
+- **Vector Dimensions**: 384
+- **Distance Metric**: Cosine similarity
+- **Use Case**: Lightweight, fast semantic search for document retrieval
+
+### Development Tools
+
+- **Python**: 3.9+
+- **Git**: Version control
+- **GitHub**: Repository hosting and collaboration
