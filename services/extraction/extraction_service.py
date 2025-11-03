@@ -14,6 +14,7 @@ Pipeline Position:
     Ingestion Service → DocumentDiscovered → [Extraction Service] → DocumentExtracted → Future Indexing Service 
 """
 
+import os
 import json
 import uuid
 import logging
@@ -21,10 +22,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional
 import pdfplumber
-import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from common.events import create_document_extracted_event, create_extraction_failed_event
+from common.events import (
+    create_document_extracted_event,
+    create_extraction_failed_event,
+    ROUTING_KEY_EXTRACTED,
+    ROUTING_KEY_EXTRACTION_FAILED
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,22 +42,35 @@ class ExtractionService:
     5. Publishes DocumentExtracted event with references
     """
 
-    def __init__(self, event_broker=None, storage_path: str = "./storage/extracted"):
-        """ 
+    def __init__(self, event_broker=None, storage_path: str = None):
+        """
         Initialize the Extraction Service. Sets up the event broker and storage path.
-        event_broker, storage_path"""
 
+        Args:
+            event_broker: RabbitMQEventBroker instance (optional)
+            storage_path: Path to storage directory (defaults to env var or /app/storage/extracted)
+        """
         self.event_broker = event_broker
+
+        # Use env var with fallback to absolute path
+        storage_path = storage_path or os.getenv("STORAGE_PATH", "/app/storage/extracted")
+
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self.extraction_method = "pdfplumber"
-        logger.info(f"Extraction service initialized. Storage: {self.storage_path}")
+        logger.info(f"✅ Extraction service initialized. Storage: {self.storage_path}")
 
     def extract_document(self, document_discovered_event: Dict[str, Any]) -> Dict[str, Any]:
-        """ 
-        Extract text and metadata from a PDF document. returns the Document Extracted event 
-        to publish to RabbitMQ. """
+        """
+        Extract text and metadata from a PDF document. Returns the DocumentExtracted event
+        to publish to RabbitMQ.
 
+        Args:
+            document_discovered_event: The DocumentDiscovered event
+
+        Returns:
+            DocumentExtracted event dictionary
+        """
         payload = document_discovered_event.get("payload", {})
         document_id = payload.get("documentId")
         url = payload.get("url")
@@ -62,29 +79,37 @@ class ExtractionService:
         correlation_id = document_discovered_event.get("correlationId")
 
         try:
-            logger.info(f"Starting extraction for document: {document_id}")
+            logger.info(f"🔄 Starting extraction for document: {document_id}")
 
-            # NOTE: Saves the extracted content to disk (event-sourced)
+            # Extract PDF content
             extracted_data = self._extract_pdf_content(url)
-            
-            storage_refs = self._save_extracted_content(
+
+            # Save extracted content to disk (event-sourced)
+            pages_ref = self._save_extracted_content(
                 document_id=document_id,
-                correlation_id=correlation_id,
                 extracted_data=extracted_data
             )
 
-            document_extracted_event = self._build_document_extracted_event(
+            # Build DocumentExtracted event using common helper
+            document_extracted_event = create_document_extracted_event(
                 document_id=document_id,
                 correlation_id=correlation_id,
-                extracted_data=extracted_data,
-                original_url=original_url
+                page_count=extracted_data["page_count"],
+                text_extracted=extracted_data["text_extracted"],
+                pdf_metadata=extracted_data["metadata"],
+                extraction_method=extracted_data["extraction_method"],
+                url=original_url,
+                pages_ref=pages_ref
             )
-            
-            logger.info(f"Successfully extracted document: {document_id}")
+
+            # Save the event to disk (event sourcing)
+            self._save_event(document_id, document_extracted_event, "extracted.json")
+
+            logger.info(f"✅ Successfully extracted document: {document_id}")
             return document_extracted_event
-            
+
         except Exception as e:
-            logger.error(f"Failed to extract document {document_id}: {str(e)}")
+            logger.error(f"❌ Failed to extract document {document_id}: {str(e)}")
             raise
 
     def _extract_pdf_content(self, pdf_path: str) -> Dict[str, Any]:
@@ -129,14 +154,14 @@ class ExtractionService:
                             })
                         else:
                             #! NOTE: Mark pages with no text (might be scanned/images)
-                            logger.warning(f"No text found on page {page_num}")
+                            logger.warning(f"⚠️ No text found on page {page_num}")
                             extracted_data["pages"].append({
                                 "page": page_num,
                                 "text": "",
                                 "note": "No extractable text (might be scanned image)"
                             })
                     except Exception as e:
-                        logger.warning(f"Failed to extract text from page {page_num}: {e}")
+                        logger.warning(f"⚠️ Failed to extract text from page {page_num}: {e}")
                         extracted_data["pages"].append({
                             "page": page_num,
                             "text": "",
@@ -146,9 +171,9 @@ class ExtractionService:
                 extracted_data["text_extracted"] = any(
                     p.get("text") for p in extracted_data["pages"]
                 )
-                
+
         except Exception as e:
-            logger.error(f"Error opening or reading PDF: {e}")
+            logger.error(f"❌ Error opening or reading PDF: {e}")
             raise
         
         return extracted_data
@@ -169,14 +194,19 @@ class ExtractionService:
     def _save_extracted_content(
         self,
         document_id: str,
-        correlation_id: str,
         extracted_data: Dict[str, Any]
-    ) -> Dict[str, str]:
+    ) -> str:
         """
-        Save the DocumentExtracted event to extracted.json (event-sourced).
-        Also save pages.jsonl with page text. """
+        Save extracted pages to pages.jsonl.
 
-        #! NOTE: Document directory should already exist (created by Ingestion)
+        Args:
+            document_id: Document identifier
+            extracted_data: Extracted content dictionary
+
+        Returns:
+            Absolute path to pages.jsonl file
+        """
+        # Document directory should already exist (created by Ingestion)
         doc_dir = self.storage_path / document_id
         doc_dir.mkdir(parents=True, exist_ok=True)
 
@@ -188,32 +218,10 @@ class ExtractionService:
             logger.info(f"📖 Read DocumentDiscovered event from: {discovered_path}")
         except FileNotFoundError:
             logger.warning(f"⚠️ discovered.json not found for {document_id}")
-            discovered_event = None
 
-        extracted_path = doc_dir / "extracted.json"
         pages_path = doc_dir / "pages.jsonl"
 
-        # Create complete DocumentExtracted event with fields listed below:
-        extracted_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        extracted_event = {
-            "eventType": "DocumentExtracted",
-            "eventId": str(uuid.uuid4()),
-            "timestamp": extracted_at,
-            "correlationId": correlation_id,
-            "source": "extraction-service",
-            "version": "1.0",
-            "payload": {
-                "documentId": document_id,
-                "textExtracted": extracted_data["text_extracted"],
-                "pageCount": extracted_data["page_count"],
-                "metadata": extracted_data["metadata"],  #! NOTE: PDF's internal metadata
-                "extractedAt": extracted_at,
-                "extractionMethod": extracted_data["extraction_method"],
-                "pagesRef": str(pages_path.absolute())
-            }
-        }
-
-        # Save pages.jsonl first (one JSON object per line)
+        # Save pages.jsonl (one JSON object per line)
         with open(pages_path, 'w', encoding='utf-8') as f:
             for page_data in extracted_data["pages"]:
                 page_record = {
@@ -224,57 +232,50 @@ class ExtractionService:
 
         logger.info(f"📄 Saved {len(extracted_data['pages'])} pages to: {pages_path}")
 
-        # Save extracted.json (event-sourced)
-        with open(extracted_path, 'w', encoding='utf-8') as f:
-            json.dump(extracted_event, f, indent=2, ensure_ascii=False)
+        return str(pages_path.absolute())
 
-        logger.info(f"💾 Saved DocumentExtracted event to: {extracted_path}")
-
-        return {
-            "extractedRef": str(extracted_path.absolute()),
-            "pagesRef": str(pages_path.absolute())
-        }
-        
-    def _build_document_extracted_event(
-        self,
-        document_id: str,
-        correlation_id: str,
-        extracted_data: Dict[str, Any],
-        original_url: str = ""
-    ) -> Dict[str, Any]:
+    def _save_event(self, document_id: str, event: Dict[str, Any], filename: str):
         """
-        Build the DocumentExtracted event for RabbitMQ using the common helper function.
-        """
+        Save event to storage (event sourcing pattern).
 
-        return create_document_extracted_event(
-            document_id=document_id,
-            correlation_id=correlation_id,
-            page_count=extracted_data["page_count"],
-            text_extracted=extracted_data["text_extracted"],
-            pdf_metadata=extracted_data["metadata"],
-            extraction_method=extracted_data["extraction_method"],
-            url=original_url
-        )
+        Args:
+            document_id: Document identifier
+            event: Event dictionary
+            filename: Output filename (e.g., "extracted.json")
+        """
+        doc_dir = self.storage_path / document_id
+        doc_dir.mkdir(parents=True, exist_ok=True)
+
+        event_file = doc_dir / filename
+        with open(event_file, 'w', encoding='utf-8') as f:
+            json.dump(event, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"💾 Saved event to: {event_file}")
 
     def publish_event(self, event: Dict[str, Any]) -> bool:
         """
-        Publish a DocumentExtracted event to the message broker. Returns True if the DocumentExtracted event was published successfully.
-        """
+        Publish a DocumentExtracted event to the message broker.
 
+        Args:
+            event: DocumentExtracted event to publish
+
+        Returns:
+            True if the DocumentExtracted event was published successfully
+        """
         if not self.event_broker:
-            logger.warning("Event broker not configured. Event not published.")
+            logger.warning("⚠️ Event broker not configured. Event not published.")
             return False
 
         try:
             self.event_broker.publish(
-                routing_key="documents.extracted",
+                routing_key=ROUTING_KEY_EXTRACTED,
                 message=json.dumps(event),
                 exchange="events"
             )
-            logger.info(f"Published DocumentExtracted event: {event['eventId']}")
+            logger.info(f"✅ Published DocumentExtracted event: {event['eventId']}")
             return True
         except Exception as e:
-            logger.error(f"Failed to publish event: {e}")
+            logger.error(f"❌ Failed to publish event: {e}")
             return False
 
     def _publish_extraction_failed_event(
@@ -286,15 +287,22 @@ class ExtractionService:
     ) -> bool:
         """
         Publish an ExtractionFailed event to the message broker for monitoring.
-        Returns True if the event was published successfully.
-        """
 
+        Args:
+            document_id: Document identifier
+            correlation_id: Correlation ID from DocumentDiscovered event
+            error_message: Description of the error
+            error_type: Type of error (ExtractionError, FileNotFound, etc.)
+
+        Returns:
+            True if the event was published successfully
+        """
         if not self.event_broker:
-            logger.warning("Event broker not configured. ExtractionFailed event not published.")
+            logger.warning("⚠️ Event broker not configured. ExtractionFailed event not published.")
             return False
 
         try:
-            logger.info(f"Publishing ExtractionFailed event for document {document_id}")
+            logger.info(f"📤 Publishing ExtractionFailed event for document {document_id}")
 
             # Create ExtractionFailed event using common helper
             event = create_extraction_failed_event(
@@ -306,16 +314,16 @@ class ExtractionService:
 
             # Publish to RabbitMQ
             self.event_broker.publish(
-                routing_key="documents.extraction.failed",
+                routing_key=ROUTING_KEY_EXTRACTION_FAILED,
                 message=json.dumps(event),
                 exchange="events"
             )
 
-            logger.info(f"ExtractionFailed event published for document {document_id}")
+            logger.info(f"✅ ExtractionFailed event published for document {document_id}")
             return True
 
         except Exception as e:
-            logger.error(f"Error publishing ExtractionFailed event: {str(e)}", exc_info=True)
+            logger.error(f"❌ Error publishing ExtractionFailed event: {str(e)}", exc_info=True)
             return False
 
     def handle_document_discovered_event(
@@ -324,15 +332,20 @@ class ExtractionService:
     ) -> Optional[Dict[str, Any]]:
         """
         Main handler for DocumentDiscovered events.
-        This is called by the worker when consuming from RabbitMQ. Returns the DocumentExtracted event if successful, None otherwise.
-        """
+        This is called by the worker when consuming from RabbitMQ.
 
+        Args:
+            event: DocumentDiscovered event from RabbitMQ
+
+        Returns:
+            DocumentExtracted event if successful, None otherwise
+        """
         try:
             document_extracted_event = self.extract_document(event)
             self.publish_event(document_extracted_event)
             return document_extracted_event
         except Exception as e:
-            logger.error(f"Error handling DocumentDiscovered event: {e}")
+            logger.error(f"❌ Error handling DocumentDiscovered event: {e}")
 
             # Publish ExtractionFailed event for monitoring
             payload = event.get("payload", {})
@@ -347,6 +360,13 @@ class ExtractionService:
             )
 
             return None
+
+    def close(self):
+        """Clean up resources."""
+        logger.info("🔒 Closing Extraction Service")
+        if self.event_broker:
+            self.event_broker.close()
+        logger.info("✅ Extraction Service closed")
 
 
 if __name__ == "__main__":

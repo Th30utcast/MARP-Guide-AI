@@ -76,7 +76,8 @@ def create_document_extracted_event(
     text_extracted: bool,
     pdf_metadata: Dict[str, Any],
     extraction_method: str = "pdfplumber",
-    url: Optional[str] = None
+    url: Optional[str] = None,
+    pages_ref: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Create a DocumentExtracted event.
@@ -92,6 +93,7 @@ def create_document_extracted_event(
         pdf_metadata: PDF's internal metadata (title, author, year, subject, etc.)
         extraction_method: Method used for extraction (default: pdfplumber)
         url: Optional original URL to the source document
+        pages_ref: Optional reference to pages.jsonl file location
 
     Returns:
         DocumentExtracted event dictionary
@@ -108,6 +110,10 @@ def create_document_extracted_event(
     # Add URL if provided
     if url:
         payload["url"] = url
+
+    # Add pagesRef if provided
+    if pages_ref:
+        payload["pagesRef"] = pages_ref
 
     return {
         "eventType": "DocumentExtracted",
@@ -200,6 +206,43 @@ def create_extraction_failed_event(
     }
 
 
+def create_ingestion_failed_event(
+    document_id: str,
+    correlation_id: str,
+    error_message: str,
+    error_type: str = "IngestionError"
+) -> Dict[str, Any]:
+    """
+    Create an IngestionFailed event (for error handling).
+
+    Published by: Ingestion Service (when ingestion fails)
+    Consumed by: Monitoring/Alerting services
+
+    Args:
+        document_id: Document identifier
+        correlation_id: Correlation ID from DocumentDiscovered
+        error_message: Description of the error
+        error_type: Type of error (IngestionError, FetchError, etc.)
+
+    Returns:
+        IngestionFailed event dictionary
+    """
+    return {
+        "eventType": "IngestionFailed",
+        "eventId": generate_event_id(),
+        "timestamp": get_utc_timestamp(),
+        "correlationId": correlation_id,
+        "source": "ingestion-service",
+        "version": "1.0",
+        "payload": {
+            "documentId": document_id,
+            "errorType": error_type,
+            "errorMessage": error_message,
+            "failedAt": get_utc_timestamp()
+        }
+    }
+
+
 def create_indexing_failed_event(
     document_id: str,
     correlation_id: str,
@@ -208,16 +251,16 @@ def create_indexing_failed_event(
 ) -> Dict[str, Any]:
     """
     Create an IndexingFailed event (for error handling).
-    
+
     Published by: Indexing Service (when indexing fails)
     Consumed by: Monitoring/Alerting services
-    
+
     Args:
         document_id: Document identifier
         correlation_id: Correlation ID from previous events
         error_message: Description of the error
         error_type: Type of error (IndexingError, VectorDBError, etc.)
-    
+
     Returns:
         IndexingFailed event dictionary
     """
@@ -244,6 +287,7 @@ def create_indexing_failed_event(
 EVENT_DOCUMENT_DISCOVERED = "DocumentDiscovered"
 EVENT_DOCUMENT_EXTRACTED = "DocumentExtracted"
 EVENT_CHUNKS_INDEXED = "ChunksIndexed"
+EVENT_INGESTION_FAILED = "IngestionFailed"
 EVENT_EXTRACTION_FAILED = "ExtractionFailed"
 EVENT_INDEXING_FAILED = "IndexingFailed"
 
@@ -255,6 +299,7 @@ EVENT_INDEXING_FAILED = "IndexingFailed"
 ROUTING_KEY_DISCOVERED = "documents.discovered"
 ROUTING_KEY_EXTRACTED = "documents.extracted"
 ROUTING_KEY_INDEXED = "documents.indexed"
+ROUTING_KEY_INGESTION_FAILED = "documents.ingestion.failed"
 ROUTING_KEY_EXTRACTION_FAILED = "documents.extraction.failed"
 ROUTING_KEY_INDEXING_FAILED = "documents.indexing.failed"
 
