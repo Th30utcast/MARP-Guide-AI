@@ -2,7 +2,7 @@ import os, time, json, logging
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import List
-from retrieval_service import load_model, get_qdrant, embed, vector_search
+from retrieval_utils import load_embedding_model, create_qdrant_client, generate_query_embedding, search_similar_chunks
 from common.mq import RabbitMQEventBroker
 from common.events import (
     create_retrieval_completed_event,
@@ -46,8 +46,8 @@ class SearchResponse(BaseModel):
 
 
 # Load model and client once
-model = load_model(EMBEDDING_MODEL)
-qdrant = get_qdrant(QDRANT_URL)
+model = load_embedding_model(EMBEDDING_MODEL)
+qdrant = create_qdrant_client(QDRANT_URL)
 
 # Broker (best-effort init; retrieval still works without broker)
 _broker = None
@@ -100,8 +100,8 @@ def search(req: SearchRequest):
     start = time.time()
 
     try:
-        query_vec = embed(model, req.query)
-        hits = vector_search(qdrant, QDRANT_COLLECTION, query_vec, req.top_k)
+        query_vec = generate_query_embedding(model, req.query)
+        hits = search_similar_chunks(qdrant, QDRANT_COLLECTION, query_vec, req.top_k)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Search failed: {e}")
 
