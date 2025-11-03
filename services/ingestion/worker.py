@@ -138,6 +138,7 @@ if __name__ == "__main__":
     # Declare queues and exchange
     try:
         broker.declare_queue("documents.discovered")
+        broker.declare_queue("documents.ingestion.failed")
 
         if broker.channel:
             broker.channel.exchange_declare(
@@ -149,6 +150,11 @@ if __name__ == "__main__":
                 exchange="events",
                 queue="documents.discovered",
                 routing_key="documents.discovered"
+            )
+            broker.channel.queue_bind(
+                exchange="events",
+                queue="documents.ingestion.failed",
+                routing_key="documents.ingestion.failed"
             )
         logger.info("✅ Queues and exchange configured")
     except Exception as e:

@@ -22,7 +22,12 @@ from typing import Dict, Any, List, Optional
 from urllib.parse import urljoin, urlparse, unquote
 from bs4 import BeautifulSoup
 
-from common.events import create_document_discovered_event
+from common.events import (
+    create_document_discovered_event,
+    create_ingestion_failed_event,
+    ROUTING_KEY_DISCOVERED,
+    ROUTING_KEY_INGESTION_FAILED
+)
 
 logger = logging.getLogger(__name__)
 
@@ -182,8 +187,8 @@ class IngestionService:
         self,
         event_broker,
         base_url: str,
-        pdf_output_dir: str = "/app/pdfs",
-        storage_path: str = "/app/storage/extracted"
+        pdf_output_dir: str = None,
+        storage_path: str = None
     ):
         """
         Initialize the Ingestion Service.
@@ -191,10 +196,17 @@ class IngestionService:
         Args:
             event_broker: RabbitMQEventBroker instance
             base_url: MARP website URL to scrape
-            pdf_output_dir: Directory to store downloaded PDFs
-            storage_path: Path to storage directory for events
+            pdf_output_dir: Directory to store downloaded PDFs (defaults to env var or /app/pdfs)
+            storage_path: Path to storage directory for events (defaults to env var or /app/storage/extracted)
         """
+        import os
+
         self.event_broker = event_broker
+
+        # Use env vars with fallback to absolute paths
+        storage_path = storage_path or os.getenv("STORAGE_PATH", "/app/storage/extracted")
+        pdf_output_dir = pdf_output_dir or os.getenv("PDF_OUTPUT_DIR", "/app/pdfs")
+
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
@@ -202,7 +214,7 @@ class IngestionService:
         self.scraper = MARPScraper(base_url=base_url)
         self.fetcher = PDFFetcher(output_dir=pdf_output_dir)
 
-        logger.info(f"Ingestion service initialized. Storage: {self.storage_path}")
+        logger.info(f"✅ Ingestion service initialized. Storage: {self.storage_path}")
 
     def _extract_document_id_from_url(self, url: str) -> str:
         """
@@ -259,6 +271,54 @@ class IngestionService:
             logger.error(f"Failed to save discovered event for {document_id}: {str(e)}")
             raise
 
+    def _publish_ingestion_failed_event(
+        self,
+        document_id: str,
+        correlation_id: str,
+        error_message: str,
+        error_type: str = "IngestionError"
+    ) -> bool:
+        """
+        Publish an IngestionFailed event to the message broker for monitoring.
+
+        Args:
+            document_id: Document identifier
+            correlation_id: Correlation ID from the ingestion process
+            error_message: Description of the error
+            error_type: Type of error (IngestionError, FetchError, ScrapingError, etc.)
+
+        Returns:
+            True if the event was published successfully
+        """
+        if not self.event_broker:
+            logger.warning("⚠️ Event broker not configured. IngestionFailed event not published.")
+            return False
+
+        try:
+            logger.info(f"📤 Publishing IngestionFailed event for document {document_id}")
+
+            # Create IngestionFailed event using common helper
+            event = create_ingestion_failed_event(
+                document_id=document_id,
+                correlation_id=correlation_id,
+                error_message=error_message,
+                error_type=error_type
+            )
+
+            # Publish to RabbitMQ
+            self.event_broker.publish(
+                routing_key=ROUTING_KEY_INGESTION_FAILED,
+                message=json.dumps(event),
+                exchange="events"
+            )
+
+            logger.info(f"✅ IngestionFailed event published for document {document_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Error publishing IngestionFailed event: {str(e)}", exc_info=True)
+            return False
+
     def _process_pdf(self, pdf_info: Dict[str, str]) -> Optional[Dict[str, Any]]:
         """
         Process a single PDF: fetch, create event, save, and publish.
@@ -269,9 +329,13 @@ class IngestionService:
         Returns:
             Processing result dictionary or None if failed
         """
+        document_id = None
+        correlation_id = None
+
         try:
             # Extract document ID from the PDF filename
             document_id = self._extract_document_id_from_url(pdf_info['url'])
+            correlation_id = hashlib.md5(document_id.encode()).hexdigest()
 
             # Check if already fetched
             if self.fetcher.file_exists(document_id):
@@ -288,6 +352,13 @@ class IngestionService:
 
             if not fetch_result:
                 logger.error(f"❌ Failed to fetch: {pdf_info['title']}")
+                # Publish failure event
+                self._publish_ingestion_failed_event(
+                    document_id=document_id,
+                    correlation_id=correlation_id,
+                    error_message=f"Failed to fetch PDF from {pdf_info['url']}",
+                    error_type="FetchError"
+                )
                 return None
 
             # Create DocumentDiscovered event using helper function
@@ -304,7 +375,7 @@ class IngestionService:
 
             # Publish event to RabbitMQ
             self.event_broker.publish(
-                routing_key="documents.discovered",
+                routing_key=ROUTING_KEY_DISCOVERED,
                 message=json.dumps(event),
                 exchange="events"
             )
@@ -319,7 +390,17 @@ class IngestionService:
             }
 
         except Exception as e:
-            logger.error(f"Error processing {pdf_info['title']}: {str(e)}")
+            logger.error(f"❌ Error processing {pdf_info['title']}: {str(e)}")
+
+            # Publish failure event if we have document_id
+            if document_id and correlation_id:
+                self._publish_ingestion_failed_event(
+                    document_id=document_id,
+                    correlation_id=correlation_id,
+                    error_message=str(e),
+                    error_type=type(e).__name__
+                )
+
             return None
 
     def run_ingestion(self) -> Dict[str, Any]:
@@ -353,9 +434,12 @@ class IngestionService:
             logger.info(f"✅ Discovered {len(discovered_pdfs)} PDFs")
 
             # Step 2 & 3: Fetch PDFs and publish events
+            # Resilience: Continue processing all PDFs even if some fail
+            # Failed items are logged and tracked via failure events
             fetched_count = 0
             published_count = 0
             skipped_count = 0
+            failed_count = 0
 
             for pdf_info in discovered_pdfs:
                 result = self._process_pdf(pdf_info)
@@ -366,10 +450,14 @@ class IngestionService:
                         published_count += 1
                     elif result["status"] == "skipped":
                         skipped_count += 1
+                else:
+                    # Failed to process (failure event already published)
+                    failed_count += 1
+                    logger.warning(f"⚠️ Failed to process: {pdf_info.get('title', 'Unknown')}")
 
             logger.info(
                 f"🎉 Ingestion completed: {fetched_count} fetched, "
-                f"{published_count} events published, {skipped_count} skipped"
+                f"{published_count} events published, {skipped_count} skipped, {failed_count} failed"
             )
 
             return {
@@ -378,7 +466,8 @@ class IngestionService:
                 "discovered": len(discovered_pdfs),
                 "fetched": fetched_count,
                 "published": published_count,
-                "skipped": skipped_count
+                "skipped": skipped_count,
+                "failed": failed_count
             }
 
         except Exception as e:

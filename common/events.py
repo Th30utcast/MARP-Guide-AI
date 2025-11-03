@@ -75,7 +75,8 @@ def create_document_extracted_event(
     page_count: int,
     text_extracted: bool,
     pdf_metadata: Dict[str, Any],
-    extraction_method: str = "pdfplumber"
+    extraction_method: str = "pdfplumber",
+    pages_ref: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Create a DocumentExtracted event.
@@ -90,10 +91,24 @@ def create_document_extracted_event(
         text_extracted: Whether text was successfully extracted
         pdf_metadata: PDF's internal metadata (title, author, year, subject, etc.)
         extraction_method: Method used for extraction (default: pdfplumber)
+        pages_ref: Optional reference to pages.jsonl file location
 
     Returns:
         DocumentExtracted event dictionary
     """
+    payload = {
+        "documentId": document_id,
+        "textExtracted": text_extracted,
+        "pageCount": page_count,
+        "metadata": pdf_metadata,  # PDF's internal metadata
+        "extractedAt": get_utc_timestamp(),
+        "extractionMethod": extraction_method
+    }
+
+    # Add pagesRef if provided
+    if pages_ref:
+        payload["pagesRef"] = pages_ref
+
     return {
         "eventType": "DocumentExtracted",
         "eventId": generate_event_id(),
@@ -101,14 +116,7 @@ def create_document_extracted_event(
         "correlationId": correlation_id,
         "source": "extraction-service",
         "version": "1.0",
-        "payload": {
-            "documentId": document_id,
-            "textExtracted": text_extracted,
-            "pageCount": page_count,
-            "metadata": pdf_metadata,  # PDF's internal metadata
-            "extractedAt": get_utc_timestamp(),
-            "extractionMethod": extraction_method
-        }
+        "payload": payload
     }
 
 
@@ -192,6 +200,43 @@ def create_extraction_failed_event(
     }
 
 
+def create_ingestion_failed_event(
+    document_id: str,
+    correlation_id: str,
+    error_message: str,
+    error_type: str = "IngestionError"
+) -> Dict[str, Any]:
+    """
+    Create an IngestionFailed event (for error handling).
+
+    Published by: Ingestion Service (when ingestion fails)
+    Consumed by: Monitoring/Alerting services
+
+    Args:
+        document_id: Document identifier
+        correlation_id: Correlation ID from DocumentDiscovered
+        error_message: Description of the error
+        error_type: Type of error (IngestionError, FetchError, etc.)
+
+    Returns:
+        IngestionFailed event dictionary
+    """
+    return {
+        "eventType": "IngestionFailed",
+        "eventId": generate_event_id(),
+        "timestamp": get_utc_timestamp(),
+        "correlationId": correlation_id,
+        "source": "ingestion-service",
+        "version": "1.0",
+        "payload": {
+            "documentId": document_id,
+            "errorType": error_type,
+            "errorMessage": error_message,
+            "failedAt": get_utc_timestamp()
+        }
+    }
+
+
 def create_indexing_failed_event(
     document_id: str,
     correlation_id: str,
@@ -200,16 +245,16 @@ def create_indexing_failed_event(
 ) -> Dict[str, Any]:
     """
     Create an IndexingFailed event (for error handling).
-    
+
     Published by: Indexing Service (when indexing fails)
     Consumed by: Monitoring/Alerting services
-    
+
     Args:
         document_id: Document identifier
         correlation_id: Correlation ID from previous events
         error_message: Description of the error
         error_type: Type of error (IndexingError, VectorDBError, etc.)
-    
+
     Returns:
         IndexingFailed event dictionary
     """
@@ -236,6 +281,7 @@ def create_indexing_failed_event(
 EVENT_DOCUMENT_DISCOVERED = "DocumentDiscovered"
 EVENT_DOCUMENT_EXTRACTED = "DocumentExtracted"
 EVENT_CHUNKS_INDEXED = "ChunksIndexed"
+EVENT_INGESTION_FAILED = "IngestionFailed"
 EVENT_EXTRACTION_FAILED = "ExtractionFailed"
 EVENT_INDEXING_FAILED = "IndexingFailed"
 
@@ -247,6 +293,7 @@ EVENT_INDEXING_FAILED = "IndexingFailed"
 ROUTING_KEY_DISCOVERED = "documents.discovered"
 ROUTING_KEY_EXTRACTED = "documents.extracted"
 ROUTING_KEY_INDEXED = "documents.indexed"
+ROUTING_KEY_INGESTION_FAILED = "documents.ingestion.failed"
 ROUTING_KEY_EXTRACTION_FAILED = "documents.extraction.failed"
 ROUTING_KEY_INDEXING_FAILED = "documents.indexing.failed"
 
