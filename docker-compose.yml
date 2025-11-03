@@ -138,13 +138,17 @@ services:
   # ============================================================================
   retrieval:
     build:
-      context: ./services/retrieval
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/retrieval/Dockerfile
     container_name: marp-retrieval
     environment:
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: marp-documents
       EMBEDDING_MODEL: all-MiniLM-L6-v2
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
     depends_on:
       qdrant:
         condition: service_started

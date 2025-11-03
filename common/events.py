@@ -221,6 +221,52 @@ def create_indexing_failed_event(
     }
 
 
+# ----------------------------------------------------------------------------
+# Retrieval Events
+# ----------------------------------------------------------------------------
+
+def create_retrieval_completed_event(
+    query: str,
+    top_k: int,
+    result_count: int,
+    latency_ms: float,
+    results_summary: Optional[list] = None,
+    correlation_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Create a RetrievalCompleted event (for analytics/monitoring).
+
+    Published by: Retrieval Service
+    Consumed by: Monitoring/Analytics services
+
+    Args:
+        query: Original user query string
+        top_k: Requested number of results
+        result_count: Number of results returned
+        latency_ms: End-to-end retrieval latency in milliseconds
+        results_summary: Optional lightweight list of results metadata, e.g.,
+            [{"documentId": str, "chunkIndex": int, "score": float}]
+        correlation_id: Optional correlation ID (generated if not provided)
+
+    Returns:
+        RetrievalCompleted event dictionary
+    """
+    return {
+        "eventType": "RetrievalCompleted",
+        "eventId": generate_event_id(),
+        "timestamp": get_utc_timestamp(),
+        "correlationId": correlation_id or generate_event_id(),
+        "source": "retrieval-service",
+        "version": "1.0",
+        "payload": {
+            "query": query,
+            "topK": top_k,
+            "resultCount": result_count,
+            "latencyMs": latency_ms,
+            "results": results_summary or []
+        }
+    }
+
 # ============================================================================
 # Event Type Constants (for consistency)
 # ============================================================================
@@ -230,6 +276,7 @@ EVENT_DOCUMENT_EXTRACTED = "DocumentExtracted"
 EVENT_CHUNKS_INDEXED = "ChunksIndexed"
 EVENT_EXTRACTION_FAILED = "ExtractionFailed"
 EVENT_INDEXING_FAILED = "IndexingFailed"
+EVENT_RETRIEVAL_COMPLETED = "RetrievalCompleted"
 
 
 # ============================================================================
@@ -241,6 +288,7 @@ ROUTING_KEY_EXTRACTED = "documents.extracted"
 ROUTING_KEY_INDEXED = "documents.indexed"
 ROUTING_KEY_EXTRACTION_FAILED = "documents.extraction.failed"
 ROUTING_KEY_INDEXING_FAILED = "documents.indexing.failed"
+ROUTING_KEY_RETRIEVAL_COMPLETED = "retrieval.completed"
 
 
 # ============================================================================

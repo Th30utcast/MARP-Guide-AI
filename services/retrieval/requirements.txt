@@ -2,3 +2,4 @@ fastapi
 uvicorn
 sentence-transformers
 qdrant-client
+pika

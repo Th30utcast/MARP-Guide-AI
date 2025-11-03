@@ -11,10 +11,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
  && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# Install Python dependencies
+COPY services/retrieval/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# Copy common utilities
+COPY common /app/common
+
+# Copy service code
+COPY services/retrieval/main.py ./
+COPY services/retrieval/retrieval_service.py ./
 
 EXPOSE 8002
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
