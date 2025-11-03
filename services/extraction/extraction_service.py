@@ -75,6 +75,7 @@ class ExtractionService:
         document_id = payload.get("documentId")
         url = payload.get("url")
         title = payload.get("title", "Unknown")
+        original_url = payload.get("originalUrl", "")
         correlation_id = document_discovered_event.get("correlationId")
 
         try:
@@ -97,6 +98,7 @@ class ExtractionService:
                 text_extracted=extracted_data["text_extracted"],
                 pdf_metadata=extracted_data["metadata"],
                 extraction_method=extracted_data["extraction_method"],
+                url=original_url,
                 pages_ref=pages_ref
             )
 

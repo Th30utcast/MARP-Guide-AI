@@ -76,6 +76,7 @@ def create_document_extracted_event(
     text_extracted: bool,
     pdf_metadata: Dict[str, Any],
     extraction_method: str = "pdfplumber",
+    url: Optional[str] = None,
     pages_ref: Optional[str] = None
 ) -> Dict[str, Any]:
     """
@@ -91,6 +92,7 @@ def create_document_extracted_event(
         text_extracted: Whether text was successfully extracted
         pdf_metadata: PDF's internal metadata (title, author, year, subject, etc.)
         extraction_method: Method used for extraction (default: pdfplumber)
+        url: Optional original URL to the source document
         pages_ref: Optional reference to pages.jsonl file location
 
     Returns:
@@ -104,6 +106,10 @@ def create_document_extracted_event(
         "extractedAt": get_utc_timestamp(),
         "extractionMethod": extraction_method
     }
+
+    # Add URL if provided
+    if url:
+        payload["url"] = url
 
     # Add pagesRef if provided
     if pages_ref:
