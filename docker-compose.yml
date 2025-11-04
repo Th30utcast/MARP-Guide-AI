@@ -48,7 +48,6 @@ services:
       - ./storage/extracted:/app/storage/extracted  # Shared storage for metadata
     networks:
       - marp-network
-    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
