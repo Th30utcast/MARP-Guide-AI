@@ -14,12 +14,9 @@ HOW IT WORKS:
 """
 
 import json
-import logging
 import os
 import sys
-import threading
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
 
 
 # Add the current directory to Python's search path so we can import our code
@@ -28,98 +25,12 @@ project_root = current_dir
 sys.path.insert(0, str(project_root))
 
 from common.mq import RabbitMQEventBroker
+from common.health import start_health_server
+from common.logging_config import setup_logging
 from indexing_service import IndexingService
 
 # Set up logging so we can see what's happening
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# HEALTH CHECK - Runs in Background to Tell Docker "I'm Still Alive"
-# ============================================================================
-
-class HealthCheckHandler(BaseHTTPRequestHandler):
-    """
-    Simple web server that responds to health checks.
-
-    Docker will visit http://localhost:8080/health every 30 seconds to check
-    if this service is still working. We respond with "healthy" or "unhealthy".
-    """
-
-    broker = None  # This will be set later to our RabbitMQ connection
-
-    def do_GET(self):
-        """Handle web requests (when someone visits /health)."""
-        if self.path == '/health':
-            # Check if we're still connected to RabbitMQ
-            is_healthy = (
-                self.broker is not None and
-                self.broker.connection is not None and
-                not self.broker.connection.is_closed and
-                self.broker.channel is not None and
-                self.broker.channel.is_open
-            )
-
-            if is_healthy:
-                # Everything is working! Send back HTTP 200 (success)
-                self.send_response(200)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {
-                    "status": "healthy",
-                    "service": "indexing-service",
-                    "rabbitmq": "connected"
-                }
-                self.wfile.write(json.dumps(response).encode())
-            else:
-                # Something is wrong! Send back HTTP 503 (service unavailable)
-                self.send_response(503)
-                self.send_header('Content-type', 'application/json')
-                self.end_headers()
-                response = {
-                    "status": "unhealthy",
-                    "service": "indexing-service",
-                    "rabbitmq": "disconnected"
-                }
-                self.wfile.write(json.dumps(response).encode())
-        else:
-            # Someone visited a page that doesn't exist
-            self.send_response(404)
-            self.end_headers()
-
-    def log_message(self, format, *args):
-        """Turn off the health check's logging (it's too noisy)."""
-        pass
-
-
-def start_health_server(broker, port=8080):
-    """
-    Start a tiny web server in the background for health checks.
-
-    This runs on a separate thread so it doesn't block the main program.
-    Docker will check http://localhost:8080/health to see if we're alive.
-    """
-    # Give the health checker access to our RabbitMQ connection
-    HealthCheckHandler.broker = broker
-
-    def run_server():
-        """This function runs in a background thread."""
-        try:
-            # Create a web server listening on all network interfaces, port 8080
-            server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-            logger.info(f"✅ Health check server started on port {port}")
-            # serve_forever() runs until the program exits
-            server.serve_forever()
-        except Exception as e:
-            logger.error(f"❌ Failed to start health server: {e}")
-
-    # Start the web server in a background thread (daemon=True means it dies when main program exits)
-    health_thread = threading.Thread(target=run_server, daemon=True)
-    health_thread.start()
+logger = setup_logging(__name__)
 
 
 # ============================================================================
@@ -141,7 +52,13 @@ def process_document_extracted(ch, method, properties, body):
     2. Decodes the JSON
     3. Validates it's a proper message
     4. Calls the indexing service to process the document
-    5. Tells RabbitMQ "I'm done" or "retry this message"
+    5. Tells RabbitMQ "I'm done" or "skip this message"
+
+    RESILIENCE STRATEGY:
+    - Failed indexing operations publish IndexingFailed events for monitoring
+    - Messages are ALWAYS acknowledged (removed from queue) to prevent infinite loops
+    - Processing continues with next document even if current one fails
+    - This prevents a single problematic document from blocking the entire pipeline
 
     IMPORTANT: This uses the 'indexing_service' variable that was created
     at the bottom of this file in the main section. That way we only load
@@ -181,10 +98,11 @@ def process_document_extracted(ch, method, properties, body):
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
     except Exception as e:
-        # Something went wrong
+        # Something went wrong during indexing
         logger.error(f"❌ Error: {str(e)}", exc_info=True)
-        # Tell RabbitMQ: "Put this message back in the queue, I'll try again later"
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+        # Acknowledge to prevent infinite loop (failure event already published by indexing_service)
+        logger.warning(f"⚠️ Processing failed but continuing with next document...")
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
 
 # ============================================================================
@@ -232,6 +150,9 @@ if __name__ == "__main__":
         # Create the outbox queue (where we send success notifications)
         broker.declare_queue("documents.indexed")
 
+        # Create the failure queue (where we send failure notifications)
+        broker.declare_queue("documents.indexing.failed")
+
         # Set up the routing system (exchange + bindings)
         if broker.channel:
             # Create a "topic" exchange (a smart router for messages)
@@ -257,6 +178,15 @@ if __name__ == "__main__":
                 exchange="events",
                 queue="documents.indexed",
                 routing_key="documents.indexed"
+            )
+
+            # Connect "documents.indexing.failed" queue to the exchange
+            # When we send messages with routing_key="documents.indexing.failed",
+            # they'll go to this queue for monitoring
+            broker.channel.queue_bind(
+                exchange="events",
+                queue="documents.indexing.failed",
+                routing_key="documents.indexing.failed"
             )
         logger.info("✅ Queues and exchange configured")
     except Exception as e:
@@ -284,7 +214,7 @@ if __name__ == "__main__":
     # ========================================================================
     # Start a tiny web server that Docker can check to see if we're alive.
     # This runs in the background (separate thread) so it doesn't block us.
-    start_health_server(broker, port=8080)
+    start_health_server(broker, service_name="indexing-service", port=8080)
 
     # ========================================================================
     # STEP 5: START CONSUMING EVENTS (Main Loop - Runs Forever!)

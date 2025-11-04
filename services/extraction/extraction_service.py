@@ -16,7 +16,6 @@ Pipeline Position:
 
 import os
 import json
-import uuid
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -367,31 +366,3 @@ class ExtractionService:
         if self.event_broker:
             self.event_broker.close()
         logger.info("✅ Extraction Service closed")
-
-
-if __name__ == "__main__":
-    #! NOTE: Quick local test without RabbitMQ
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    sample_event = {
-        "eventType": "DocumentDiscovered",
-        "eventId": str(uuid.uuid4()),
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "correlationId": "test-123",
-        "source": "test",
-        "version": "1.0",
-        "payload": {
-            "documentId": "test-doc",
-            "title": "Test Document",
-            "url": "./test-pdfs/sample.pdf",  # Put a test PDF here
-            "discoveredAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "fileSize": 12345
-        }
-    }
-    
-    service = ExtractionService()
-    result = service.extract_document(sample_event)
-    print(json.dumps(result, indent=2))

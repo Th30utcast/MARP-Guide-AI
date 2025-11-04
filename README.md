@@ -104,8 +104,9 @@ graph TB
 1. **Ingestion Service** - Discovers and downloads MARP PDFs from Lancaster's website
 2. **Extraction Service** - Extracts text and metadata from PDFs using pdfplumber
 3. **Indexing Service** - Chunks documents semantically and generates vector embeddings
-4. **Qdrant** - Vector database for semantic search
-5. **RabbitMQ** - Message broker for event-driven communication
+4. **Retrieval Service** - REST API for semantic search over indexed documents
+5. **Qdrant** - Vector database for semantic search
+6. **RabbitMQ** - Message broker for event-driven communication
 
 ### Event Flow Pipeline
 
@@ -148,6 +149,7 @@ For detailed architecture diagrams, see:
    - Ingestion Service (auto-starts PDF discovery and download)
    - Extraction Service (processes PDFs)
    - Indexing Service (generates embeddings and stores in Qdrant)
+   - Retrieval Service (REST API for semantic search)
 
 3. **Monitor logs**:
 
@@ -159,37 +161,65 @@ For detailed architecture diagrams, see:
    docker compose logs -f ingestion
    docker compose logs -f extraction
    docker compose logs -f indexing
+   docker compose logs -f retrieval
    ```
 
 4. **Check service health**:
    - Ingestion Service: http://localhost:8001/health
+   - Retrieval Service: http://localhost:8002/health
    - RabbitMQ Management UI: http://localhost:15672
    - Qdrant Dashboard: http://localhost:6333/dashboard
 
-### Testing the API
+### Testing the Retrieval Service
+
+The **easiest way** to test the retrieval service (works on all platforms):
+
+1. **Open your browser** and go to: http://localhost:8002/docs
+2. Click on **POST /search**
+3. Click **"Try it out"**
+4. Enter your query:
+   ```json
+   {
+     "query": "What happens if I am ill during exams?",
+     "top_k": 5
+   }
+   ```
+5. Click **"Execute"**
+6. View results with metadata (title, page number, URL)
+
+#### Command Line Testing (Optional)
+
+**Mac/Linux:**
 
 ```bash
-# Linux/Mac
-curl http://localhost:8001/...
-
-# Windows PowerShell
-curl.exe http://localhost:8001/...
-
-# Windows CMD
-curl http://localhost:8001/...
-
-# Or visit in browser: http://localhost:8001/stats
-# Use "ingest" or "stats" or "health" or "extract" instead of the "..."
+curl -X POST http://localhost:8002/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is MARP?", "top_k": 5}'
 ```
 
-#### Alternative: Use the Browser (Easiest Method - Works on All Platforms)
+**Windows PowerShell:**
+
+```powershell
+$body = @{
+    query = "What is MARP?"
+    top_k = 5
+} | ConvertTo-Json
+
+Invoke-WebRequest -Uri http://localhost:8002/search `
+  -Method POST -ContentType "application/json" -Body $body |
+  Select-Object -ExpandProperty Content | ConvertFrom-Json
+```
+
+### Testing the Ingestion Service
+
+**Browser Method (Easiest):**
 
 1. Visit the **FastAPI Interactive Docs**: http://localhost:8001/docs
 2. Find the `POST /ingest` endpoint
 3. Click "Try it out" → "Execute"
 4. View the response directly in the browser
 
-You can also check these URLs directly in your browser:
+**Check these URLs in your browser:**
 
 - Service Info: http://localhost:8001/
 - Health Check: http://localhost:8001/health
@@ -249,6 +279,29 @@ docker compose down -v
   - `POST /ingest` - Manually trigger ingestion
   - `GET /stats` - View ingestion statistics
 
+### Retrieval Service API
+
+- **URL**: http://localhost:8002
+- **Interactive Docs**: http://localhost:8002/docs
+- **Endpoints**:
+  - `GET /health` - Health check (returns model info and collection status)
+  - `POST /search` - Semantic search endpoint
+    - **Request Body**:
+      ```json
+      {
+        "query": "your search query",
+        "top_k": 5
+      }
+      ```
+    - **Response**: Returns top-k results with:
+      - `text` - Relevant text snippet
+      - `title` - Document title
+      - `page` - Page number
+      - `url` - Link to original PDF
+      - `document_id` - Unique document identifier
+      - `chunk_index` - Position within document
+      - `score` - Relevance score (0-1, higher is better)
+
 ## Data Storage
 
 ### PDFs Directory
@@ -284,19 +337,23 @@ storage/extracted/{documentId}/
 MARP-Guide-AI/
 ├── services/
 │   ├── ingestion/          # PDF discovery and download
-│   │   ├── main.py         # FastAPI application
-│   │   ├── scraper.py      # Web scraping logic
-│   │   ├── fetcher.py      # PDF download logic
-│   │   └── event_broker.py # RabbitMQ wrapper
+│   │   ├── ingestion_service.py  # Core service logic
+│   │   └── worker.py             # RabbitMQ consumer
 │   ├── extraction/         # PDF text extraction
 │   │   ├── extraction_service.py
 │   │   └── worker.py       # RabbitMQ consumer
-│   └── indexing/           # Chunking and embeddings
-│       ├── indexing_service.py
-│       └── worker.py       # RabbitMQ consumer
+│   ├── indexing/           # Chunking and embeddings
+│   │   ├── indexing_service.py
+│   │   └── worker.py       # RabbitMQ consumer
+│   └── retrieval/          # Semantic search API
+│       ├── retrieval_service.py  # FastAPI application
+│       ├── retrieval_utils.py    # Helper functions
+│       └── worker.py             # Event monitor
 ├── common/                 # Shared modules
 │   ├── events.py           # Event schemas and helpers
-│   └── mq.py              # RabbitMQ broker wrapper
+│   ├── mq.py               # RabbitMQ broker wrapper
+│   ├── health.py           # Health check utilities
+│   └── logging_config.py   # Logging configuration
 ├── docs/
 │   ├── diagrams/          # Architecture diagrams
 │   ├── events/            # Event catalogue
@@ -353,9 +410,6 @@ docker compose logs ingestion
    # Windows PowerShell
    curl.exe http://localhost:6333/collections
 
-   # Windows CMD
-   curl http://localhost:6333/collections
-
    # Or visit in browser: http://localhost:6333/collections
    ```
 
@@ -381,9 +435,6 @@ docker compose logs ingestion
    # Windows PowerShell
    curl.exe http://localhost:8001/stats
 
-   # Windows CMD
-   curl http://localhost:8001/stats
-
    # Or visit in browser: http://localhost:8001/stats
    ```
 
@@ -395,9 +446,6 @@ docker compose logs ingestion
 
    # Windows PowerShell
    curl.exe -X POST http://localhost:8001/ingest
-
-   # Windows CMD
-   curl -X POST http://localhost:8001/ingest
 
    # Or use browser: http://localhost:8001/docs
    ```
@@ -420,9 +468,6 @@ docker compose logs ingestion
 
    # Windows PowerShell
    curl.exe http://localhost:8001/health
-
-   # Windows CMD
-   curl http://localhost:8001/health
 
    # Or visit in browser: http://localhost:8001/health
    ```
@@ -470,6 +515,17 @@ docker compose logs ingestion
 | **qdrant-client**         | 1.7.0   | Python client for Qdrant vector database |
 | **NumPy**                 | 1.24.3  | Numerical computations for vectors       |
 | **Pika**                  | 1.3.2   | RabbitMQ client for consuming events     |
+
+### Retrieval Service
+
+| Technology                | Version | Purpose                                       |
+| ------------------------- | ------- | --------------------------------------------- |
+| **FastAPI**               | 0.104.1 | Modern Python web framework for REST API      |
+| **Uvicorn**               | 0.24.0  | ASGI server for FastAPI                       |
+| **sentence-transformers** | 3.0.0+  | Generate query embeddings for semantic search |
+| **qdrant-client**         | 1.7.0   | Python client for Qdrant vector database      |
+| **Pydantic**              | 2.0+    | Data validation and settings management       |
+| **Pika**                  | 1.3.2   | RabbitMQ client for publishing events         |
 
 ### Embedding Model
 
