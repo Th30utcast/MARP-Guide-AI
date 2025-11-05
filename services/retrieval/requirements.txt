@@ -1,5 +1,18 @@
+# Retrieval Service Requirements enable the retrieval service to receive queries, generate embeddings, search the vector database, and notify other services about completed searches
+
+# File Path: services/retrieval/requirements.txt
+
+# FastAPI: Modern Python web framework for REST API
 fastapi
+
+# Uvicorn: ASGI server for FastAPI
 uvicorn
+
+# sentence-transformers: Generate query embeddings for semantic search
 sentence-transformers
+
+# qdrant-client: Python client for Qdrant vector database
 qdrant-client
+
+# Pika: RabbitMQ client for consuming events
 pika
