@@ -117,8 +117,8 @@ Ingestion → DocumentDiscovered → Extraction → DocumentExtracted → Indexi
 
 For detailed architecture diagrams, see:
 
-- [Ingestion Pipeline](docs/diagrams/Ingestion_pipeline.md)
-- [Microservices & Broker](docs/diagrams/Microservices_Broker.md)
+- [Ingestion Pipeline](docs/services/Ingestion/Ingestion_pipeline.md)
+- [Microservices & Broker](docs/services/Microservices_Broker.md)
 - [Event Catalogue](docs/events/event-catalogue.md)
 
 ## Quick Start
@@ -302,14 +302,10 @@ docker compose down -v
 - Distance metric: Cosine similarity
 - Embedding model: `all-MiniLM-L6-v2`
 
-### Ingestion Service API
+### Ingestion Service
 
-- **URL**: http://localhost:8001
-- **Endpoints**:
-  - `GET /` - Service info
-  - `GET /health` - Health check
-  - `POST /ingest` - Manually trigger ingestion
-  - `GET /stats` - View ingestion statistics
+- **Health Check**: http://localhost:8001/health
+- **Note**: Ingestion is a worker service that runs automatically on startup (not a REST API)
 
 ### Retrieval Service API
 
@@ -317,7 +313,6 @@ docker compose down -v
 - **Interactive Docs**: http://localhost:8002/docs
 - **Endpoints**:
   - `GET /health` - Health check (returns model info and collection status)
-  - `GET /readyz` - Readiness check (verifies Qdrant connectivity)
   - `POST /search` - Semantic search endpoint
     - **Request Body**:
       ```json
@@ -597,8 +592,8 @@ docker compose logs ingestion
 | -------------- | ------- | ---------------------------------------- |
 | **FastAPI**    | 0.104.1 | Modern Python web framework for REST API |
 | **Uvicorn**    | 0.24.0  | ASGI server for FastAPI                  |
-| **httpx**      | 0.25.0+ | Async HTTP client for Retrieval Service  |
-| **OpenAI SDK** | 1.0+    | Python client for OpenRouter API         |
+| **httpx**      | Latest  | Async HTTP client for Retrieval Service  |
+| **OpenAI SDK** | Latest  | Python client for OpenRouter API         |
 | **Pydantic**   | 2.0+    | Data validation and settings management  |
 | **OpenRouter** | API     | LLM gateway (DeepSeek Chat v3.1)         |
 
@@ -612,7 +607,7 @@ docker compose logs ingestion
 ### LLM Model
 
 - **Provider**: OpenRouter
-- **Model**: DeepSeek Chat v3.1 (free tier)
+- **Model**: `deepseek/deepseek-chat-v3.1:free`
 - **Temperature**: 0.7
 - **Max Tokens**: 500
 - **Use Case**: RAG-powered question answering with citations

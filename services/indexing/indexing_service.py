@@ -1,17 +1,11 @@
 """
 Indexing Service - Converts Documents into Searchable Vectors
 
-WHAT THIS DOES:
-Takes extracted text from PDF documents and converts them into a format that can be
-searched using AI (semantic search). Think of it like creating an index at the back
-of a book, but using AI to understand meaning instead of just keywords.
-
 THE PROCESS:
 1. Receives text that was extracted from a PDF
-2. Breaks the text into small chunks (paragraphs, ~400 tokens each)
-3. Converts each chunk into a vector (a list of 384 numbers that represents the meaning)
+2. Breaks the text into small chunks (~200 tokens each with 50 token overlap)
+3. Converts each chunk into a vector
 4. Stores these vectors in a database (Qdrant)
-5. Later, when someone asks a question, we can find similar vectors to answer them
 
 WHY WE DO THIS:
 - Can't feed entire 100-page document to AI (too big)
@@ -21,7 +15,7 @@ WHY WE DO THIS:
 
 TECHNICAL DETAILS:
 - Uses all-MiniLM-L6-v2 model (converts text → 384 numbers)
-- Stores in Qdrant vector database (optimized for similarity search)
+- Stores in Qdrant vector database
 - Preserves metadata (title, page number, URL) for citations
 """
 
@@ -75,18 +69,13 @@ class IndexingService:
 
         WHAT HAPPENS HERE:
         1. Connect to RabbitMQ (for sending messages to other services)
-        2. Load the AI model (all-MiniLM-L6-v2) - takes ~30 seconds
-        3. Connect to Qdrant database (where we store vectors)
+        2. Load the AI model (all-MiniLM-L6-v2)
+        3. Connect to Qdrant database
         4. Create the database collection if it doesn't exist
-
-        WHY WE DO THIS IN INIT:
-        Loading the AI model is SLOW (30 seconds). By doing it once here,
-        every document after that processes FAST (reuses the loaded model).
         """
         logger.info("Initializing Indexing Service...")
 
         # Get RabbitMQ connection settings from environment variables
-        # (Docker sets these for us)
         self.rabbitmq_host = os.getenv("RABBITMQ_HOST", "localhost")
         self.rabbitmq_port = int(os.getenv("RABBITMQ_PORT", "5672"))
         self.rabbitmq_user = os.getenv("RABBITMQ_USER", "guest")
@@ -104,19 +93,17 @@ class IndexingService:
         )
 
         # Load the AI embedding model
-        # This is a pre-trained model that converts text into vectors (lists of numbers)
         # all-MiniLM-L6-v2 creates 384-dimensional vectors (384 numbers per chunk)
         logger.info("Loading embedding model: all-MiniLM-L6-v2")
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
         logger.info("Embedding model loaded successfully")
 
-        # Connect to Qdrant (the vector database)
-        # Qdrant is specialized for storing and searching vectors
+        # Connect to Qdrant
         qdrant_host = os.getenv("QDRANT_HOST", "qdrant")
         qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
         logger.info(f"Connecting to Qdrant at {qdrant_host}:{qdrant_port}")
 
-        # Retry logic: Qdrant might not be ready immediately on startup
+        # Retry logic for qdrant
         # Try up to 10 times with 2-second delays between attempts
         max_retries = 10
         retry_delay = 2
@@ -140,7 +127,6 @@ class IndexingService:
                     raise  # Re-raise the exception
 
         # Configure the Qdrant collection
-        # Collection = like a database table, stores all our document vectors
         self.collection_name = "marp-documents"
         self.vector_size = 384  # all-MiniLM-L6-v2 creates 384-dimensional vectors
 
@@ -152,10 +138,6 @@ class IndexingService:
     def _setup_qdrant_collection(self):
         """
         Create the Qdrant collection (database table) if it doesn't exist.
-
-        WHAT IS A COLLECTION:
-        Think of it like a database table. It stores all our vectors with their metadata.
-        Each collection has a specific vector size (384 in our case).
 
         PARAMETERS:
         - collection_name: "marp-documents" (where we store all MARP document vectors)
@@ -174,7 +156,7 @@ class IndexingService:
             )
             logger.info(f"Collection '{self.collection_name}' created successfully")
         except Exception as e:
-            # Collection might already exist from a previous run - that's OK!
+            # Collection might already exist from a previous run
             if "already exists" in str(e):
                 logger.info(f"Collection '{self.collection_name}' already exists")
             else:
@@ -192,11 +174,12 @@ class IndexingService:
 
         THIS IS THE ORCHESTRATOR! It calls all the other functions in order:
         1. Read the extracted pages from disk
-        2. Chunk each page into smaller pieces
-        3. Generate embeddings (vectors) for all chunks
-        4. Store the vectors in Qdrant database
-        5. Save chunks to disk (for debugging)
-        6. Publish success event to RabbitMQ
+        2. Get metadata from the event (title, URL)
+        3. Chunk each page into smaller pieces
+        4. Generate embeddings (vectors) for all chunks
+        5. Store the vectors in Qdrant database
+        6. Save chunks to disk (for debugging)
+        7. Publish success event to RabbitMQ
 
         PARAMETERS:
         - event: Dictionary containing document info (documentId, metadata, etc.)
@@ -255,17 +238,15 @@ class IndexingService:
             self.store_chunks_in_qdrant(all_chunks, embeddings, document_id)
 
             # STEP 6: Save chunks to disk for debugging
-            # Helpful for seeing what chunks were created
             self._save_chunks(document_id, all_chunks)
 
             # STEP 7: Publish success event
-            # Tell other services "I finished indexing this document!"
             self.publish_chunks_indexed_event(document_id, correlation_id, len(all_chunks))
 
             logger.info(f"Successfully indexed document {document_id}")
 
         except Exception as e:
-            # Something went wrong! Log the error and publish a failure event
+            # Log the error and publish a failure event
             logger.error(f"Error processing DocumentExtracted event: {str(e)}", exc_info=True)
             # Publish IndexingFailed event so other services know it failed
             self._publish_indexing_failed_event(event, str(e))
@@ -289,11 +270,6 @@ class IndexingService:
         3. Each chunk overlaps with previous by overlap_tokens (25%)
         4. Decode tokens back to text for each chunk
         5. Attach metadata (title, page, url) to each chunk
-
-        WHY USE ACTUAL TOKENIZER:
-        - Character-based estimation (char/4) fails badly for punctuation-heavy content
-        - Table of contents with dots: "PR 3.2...." = 799 chars but 662 tokens!
-        - Proper tokenization ensures chunks stay under model's 256 token limit
 
         PARAMETERS:
         - text: The full page text to split up
@@ -371,16 +347,6 @@ class IndexingService:
         """
         Convert text chunks into vectors (embeddings) using AI.
 
-        WHAT IS AN EMBEDDING:
-        An embedding is a list of numbers that represents the MEANING of text.
-        Similar texts have similar numbers. For example:
-        - "car" and "automobile" would have very similar embeddings
-        - "car" and "pizza" would have very different embeddings
-
-        HOW IT WORKS:
-        We use a pre-trained AI model (all-MiniLM-L6-v2) that was trained on
-        millions of text examples to understand meaning.
-
         PARAMETERS:
         - texts: List of text strings (our chunks)
 
@@ -391,8 +357,6 @@ class IndexingService:
         logger.info(f"Generating embeddings for {len(texts)} chunks")
 
         # Use the AI model to convert all texts to vectors
-        # batch_size=32 means process 32 chunks at a time (for efficiency)
-        # show_progress_bar=False because we're logging ourselves
         embeddings = self.model.encode(texts, batch_size=32, show_progress_bar=False)
 
         logger.info(f"Generated embeddings with shape {embeddings.shape}")
@@ -408,10 +372,6 @@ class IndexingService:
         1. The vector (384 numbers representing meaning)
         2. The original text (so we can return it in search results)
         3. Metadata (title, page number, URL for citations)
-
-        WHY QDRANT:
-        Qdrant is optimized for finding similar vectors FAST.
-        When someone searches, Qdrant can find the most similar chunks in milliseconds.
 
         PARAMETERS:
         - chunks: List of chunk dictionaries (with text and metadata)
@@ -457,10 +417,6 @@ class IndexingService:
         """
         Save chunks to disk as JSON for debugging/auditing.
 
-        WHY WE DO THIS:
-        It's helpful to see what chunks were created from a document.
-        This file lets us debug issues or see how the chunking worked.
-
         FILE LOCATION:
         storage/extracted/{documentId}/chunks.json
         """
@@ -483,10 +439,6 @@ class IndexingService:
                                      chunk_count: int):
         """
         Publish a success event to RabbitMQ saying "indexing is done!"
-
-        WHY WE PUBLISH EVENTS:
-        Other services need to know when indexing completes. For example,
-        the retrieval service can start using this document for searches.
 
         WHAT'S IN THE EVENT:
         - documentId: Which document we indexed
@@ -526,12 +478,6 @@ class IndexingService:
     def _publish_indexing_failed_event(self, original_event: Dict[str, Any], error_message: str):
         """
         Publish a failure event when something goes wrong.
-
-        WHY THIS IS IMPORTANT:
-        If indexing fails, other services need to know so they can:
-        - Retry the document later
-        - Alert administrators
-        - Track failure rates
 
         WHERE IT GOES:
         Sent to RabbitMQ with routing_key="documents.indexing.failed"

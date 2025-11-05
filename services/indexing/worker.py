@@ -6,14 +6,15 @@ This program waits for messages from the extraction service. When a document has
 extracted, this service chunks it, creates embeddings, and stores them in a database.
 
 HOW IT WORKS:
-1. Starts up and loads the AI model (takes about 30 seconds)
-2. Connects to RabbitMQ (the message system)
+1. Starts up and loads the AI model
+2. Connects to RabbitMQ
 3. Waits for messages saying "document extracted"
 4. When a message arrives, processes that document
 5. Repeats step 4 forever (until you press Ctrl+C)
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -23,8 +24,7 @@ current_dir = Path(__file__).resolve().parent
 project_root = current_dir
 sys.path.insert(0, str(project_root))
 
-from common.config import get_rabbitmq_broker
-from common.events import ROUTING_KEY_EXTRACTED, ROUTING_KEY_INDEXED, ROUTING_KEY_INDEXING_FAILED
+from common.mq import RabbitMQEventBroker
 from common.health import start_health_server
 from common.logging_config import setup_logging
 from indexing_service import IndexingService
@@ -59,10 +59,6 @@ def process_document_extracted(ch, method, properties, body):
     - Messages are ALWAYS acknowledged (removed from queue) to prevent infinite loops
     - Processing continues with next document even if current one fails
     - This prevents a single problematic document from blocking the entire pipeline
-
-    IMPORTANT: This uses the 'indexing_service' variable that was created
-    at the bottom of this file in the main section. That way we only load
-    the AI model once, not for every message!
     """
     # Tell Python we're using the global variable (created in main below)
     global indexing_service
@@ -86,7 +82,7 @@ def process_document_extracted(ch, method, properties, body):
         # This calls indexing_service.py which does: read → chunk → embed → store
         indexing_service.handle_document_extracted_event(event)
 
-        # Step 5: Success! Tell RabbitMQ "I finished processing this message"
+        # Step 5: Success! Tell RabbitMQ
         logger.info(f"✅ Indexed: {event['payload']['documentId']}")
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
@@ -114,20 +110,25 @@ if __name__ == "__main__":
     This is where the program starts executing.
 
     STARTUP SEQUENCE (5 steps):
-    1. Connect to RabbitMQ (the messaging system)
+    1. Connect to RabbitMQ
     2. Set up the queues (inboxes for messages)
-    3. Load the AI model and connect to the database (takes ~30 seconds)
+    3. Load the AI model and connect to the database
     4. Start the health check web server (background)
     5. Start listening for messages (runs forever)
     """
     logger.info("🚀 Initializing Indexing Service Worker...")
 
     # ========================================================================
-    # STEP 1: CONNECT TO RABBITMQ (The Message Broker)
+    # STEP 1: CONNECT TO RABBITMQ
     # ========================================================================
     try:
-        # Get configured RabbitMQ broker from centralized config
-        broker = get_rabbitmq_broker()
+        # Read connection settings from environment variables (set by Docker)
+        broker = RabbitMQEventBroker(
+            host=os.getenv("RABBITMQ_HOST", "localhost"),      # Where is RabbitMQ?
+            port=int(os.getenv("RABBITMQ_PORT", 5672)),        # What port?
+            username=os.getenv("RABBITMQ_USER", "guest"),      # Login username
+            password=os.getenv("RABBITMQ_PASSWORD", "guest")   # Login password
+        )
         logger.info("✅ Connected to RabbitMQ")
     except Exception as e:
         # Connection failed
@@ -140,17 +141,17 @@ if __name__ == "__main__":
     # ========================================================================
     try:
         # Create the inbox queue (where extraction service sends us messages)
-        broker.declare_queue(ROUTING_KEY_EXTRACTED)
+        broker.declare_queue("documents.extracted")
 
         # Create the outbox queue (where we send success notifications)
-        broker.declare_queue(ROUTING_KEY_INDEXED)
+        broker.declare_queue("documents.indexed")
 
         # Create the failure queue (where we send failure notifications)
-        broker.declare_queue(ROUTING_KEY_INDEXING_FAILED)
+        broker.declare_queue("documents.indexing.failed")
 
         # Set up the routing system (exchange + bindings)
         if broker.channel:
-            # Create a "topic" exchange (a smart router for messages)
+            # Create a "topic" exchange
             broker.channel.exchange_declare(
                 exchange="events",           # Name of the exchange
                 exchange_type="topic",       # Type: topic (uses routing keys)
@@ -162,8 +163,8 @@ if __name__ == "__main__":
             # it will arrive in our inbox
             broker.channel.queue_bind(
                 exchange="events",
-                queue=ROUTING_KEY_EXTRACTED,
-                routing_key=ROUTING_KEY_EXTRACTED
+                queue="documents.extracted",
+                routing_key="documents.extracted"
             )
 
             # Connect "documents.indexed" queue to the exchange
@@ -171,8 +172,8 @@ if __name__ == "__main__":
             # they'll go to this queue
             broker.channel.queue_bind(
                 exchange="events",
-                queue=ROUTING_KEY_INDEXED,
-                routing_key=ROUTING_KEY_INDEXED
+                queue="documents.indexed",
+                routing_key="documents.indexed"
             )
 
             # Connect "documents.indexing.failed" queue to the exchange
@@ -180,8 +181,8 @@ if __name__ == "__main__":
             # they'll go to this queue for monitoring
             broker.channel.queue_bind(
                 exchange="events",
-                queue=ROUTING_KEY_INDEXING_FAILED,
-                routing_key=ROUTING_KEY_INDEXING_FAILED
+                queue="documents.indexing.failed",
+                routing_key="documents.indexing.failed"
             )
         logger.info("✅ Queues and exchange configured")
     except Exception as e:
@@ -191,8 +192,8 @@ if __name__ == "__main__":
     # ========================================================================
     # STEP 3: INITIALIZE INDEXING SERVICE (Load AI Model & Connect to Database)
     # ========================================================================
-    # We load the AI model ONCE here (takes ~30 seconds).
-    # GLOBAL VARIABLE: We create 'indexing_service' here so the callback
+    # We load the AI model ONCE here
+    # GLOBAL VARIABLE: We create 'indexing_service' here so the callback function can use it
     try:
         # Create the IndexingService instance (loads model, connects to Qdrant)
         # This is GLOBAL - the process_document_extracted() function will use it
@@ -223,12 +224,10 @@ if __name__ == "__main__":
         # Start consuming messages from the "documents.extracted" queue
         # Every time a message arrives, RabbitMQ will call process_document_extracted()
         broker.consume(
-            queue_name=ROUTING_KEY_EXTRACTED,          # Which queue to listen to
+            queue_name="documents.extracted",          # Which queue to listen to
             callback=process_document_extracted,       # What function to call for each message
-            auto_ack=False                            # We'll manually acknowledge (for reliability)
+            auto_ack=False                            # We'll manually acknowledge
         )
-        # NOTE: The program BLOCKS at the line above! It never reaches this comment
-        # until we press Ctrl+C or there's an error.
 
     except KeyboardInterrupt:
         # User pressed Ctrl+C - shut down gracefully
@@ -238,7 +237,7 @@ if __name__ == "__main__":
         logger.info("👋 Goodbye!")
 
     except Exception as e:
-        # Something went very wrong - crash and log the error
+        # crash and log the error
         logger.error(f"❌ Fatal error: {e}", exc_info=True)
         indexing_service.close()
         broker.close()
