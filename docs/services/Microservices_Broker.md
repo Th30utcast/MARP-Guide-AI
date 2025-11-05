@@ -41,12 +41,21 @@ flowchart TB
     RS[Retrieval Service<br/>Semantic Search]
   end
 
+  subgraph Chat["Chat Service (FastAPI)"]
+    CA[FastAPI App<br/>REST API]
+    RC[Retrieval Client<br/>HTTP]
+    OR[OpenRouter Client<br/>LLM API]
+  end
+
   subgraph VectorDB["Qdrant Vector Database"]
     VDB[(marp-documents<br/>)]
   end
 
+  subgraph LLM["External LLM"]
+    OpenRouter[OpenRouter API<br/>DeepSeek Chat v3.1]
+  end
+
   subgraph Future["🚧 Future Services"]
-    Chat[Chat Service<br/>RAG + LLM]
     UI[Web UI<br/>Chat Interface]
   end
 
@@ -74,16 +83,23 @@ flowchart TB
   RA -->|publish| Exchange
   Exchange --> Q4
 
-  VDB -.->|future| Chat
+  CA -->|HTTP POST /search| RA
+  RA -->|search results| CA
+  CA -->|HTTP POST| OpenRouter
+  OpenRouter -->|generated answer| CA
+  CA -->|optional| Exchange
+
   Chat -.->|future| UI
 
   style Ingestion fill:#00A310
   style Extraction fill:#00A310
   style Indexing fill:#00A310
   style Retrieval fill:#00A310
+  style Chat fill:#00A310
   style Broker fill:#A3A300
   style Storage fill:#003BD1
   style VectorDB fill:#003BD1
+  style LLM fill:#D17800
   style Future fill:,stroke-dasharray: 5 5
 ```
 
@@ -92,12 +108,13 @@ flowchart TB
 - **Green**: Implemented and operational services
 - **Yellow**: Message broker infrastructure
 - **Blue**: Data storage systems
+- **Orange**: External LLM services
 - **Gray (dashed)**: Planned future components
 
 ## Current Status
 
-- ✅ **Operational**: Ingestion → Extraction → Indexing → Retrieval pipeline
-- 🚧 **In Development**: Chat and Web UI services
+- ✅ **Operational**: Ingestion → Extraction → Indexing → Retrieval → Chat pipeline
+- 🚧 **In Development**: Web UI service
 
 ## Event Details
 
@@ -187,6 +204,26 @@ flowchart TB
 }
 ```
 
+### 5. AnswerGenerated
+
+```json
+{
+  "eventType": "AnswerGenerated",
+  "eventId": "uuid",
+  "timestamp": "2025-11-04T18:30:47Z",
+  "correlationId": "uuid",
+  "source": "chat-service",
+  "version": "1.0",
+  "payload": {
+    "query": "What happens if I am ill during exams?",
+    "answer": "According to the MARP regulations, if you are ill during exams you should submit an Extenuating Circumstances claim...",
+    "citation_count": 2,
+    "generated_at": "2025-11-04T18:30:47Z",
+    "trace_id": "trace-abc123"
+  }
+}
+```
+
 ## Storage Structure
 
 ```
@@ -226,9 +263,18 @@ All services utilize shared modules for consistency:
 #### Retrieval Service (Port 8002)
 
 - `GET /health` - Health check (returns model info and collection status)
+- `GET /readyz` - Readiness check (verifies Qdrant connectivity)
 - `POST /search` - Semantic search endpoint
   - Request: `{"query": "your question", "top_k": 5}`
   - Response: Returns top-k results with text, metadata, and relevance scores
+- `GET /docs` - Interactive API documentation (Swagger UI)
+
+#### Chat Service (Port 8003)
+
+- `GET /health` - Health check
+- `POST /chat` - RAG-powered question answering
+  - Request: `{"query": "your question", "top_k": 5}`
+  - Response: Returns generated answer with citations
 - `GET /docs` - Interactive API documentation (Swagger UI)
 
 ### Docker Compose Configuration
@@ -241,3 +287,4 @@ Services are orchestrated with proper health checks and restart policies:
 - **Extraction** - Worker that processes documents continuously
 - **Indexing** - Worker that indexes documents continuously
 - **Retrieval** - Always running REST API service
+- **Chat** - Always running REST API service (RAG pipeline)
