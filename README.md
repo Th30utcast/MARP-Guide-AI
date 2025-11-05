@@ -138,8 +138,7 @@ For detailed architecture diagrams, see:
 
 2. **Configure environment variables**:
    ```bash
-   # Open the API_KEY file
-   cp .env.API_Key .env
+   # Open the .env file
 
    # Edit .env and add your OpenRouter API key
    # Replace 'your_openrouter_api_key_here' with your actual key
@@ -149,6 +148,7 @@ For detailed architecture diagrams, see:
    ```bash
    OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxx
    ```
+   **Note:** If you experience authentication issues, ensure `OPENROUTER_API_KEY` is not exported in your terminal environment (run `unset OPENROUTER_API_KEY` or use a fresh terminal).
 
 ### Running the System
 
@@ -617,7 +617,7 @@ docker compose logs ingestion
 | **httpx**      | Latest  | Async HTTP client for Retrieval Service  |
 | **OpenAI SDK** | Latest  | Python client for OpenRouter API         |
 | **Pydantic**   | 2.0+    | Data validation and settings management  |
-| **OpenRouter** | API     | LLM gateway (DeepSeek Chat v3.1)         |
+| **OpenRouter** | API     | LLM gateway (Google/Gemma Chat 3n)         |
 
 ### Embedding Model
 
@@ -629,7 +629,7 @@ docker compose logs ingestion
 ### LLM Model
 
 - **Provider**: OpenRouter
-- **Model**: `deepseek/deepseek-chat-v3.1:free`
+- **Model**: `google/gemma-3n-e2b-it:free`
 - **Temperature**: 0.7
 - **Max Tokens**: 500
 - **Use Case**: RAG-powered question answering with citations
