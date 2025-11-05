@@ -1,8 +1,28 @@
 """
-Indexing Service - Chunks documents and generates embeddings for vector search
+Indexing Service - Converts Documents into Searchable Vectors
 
-This service consumes DocumentExtracted events, performs semantic chunking,
-generates embeddings, and stores vectors in Qdrant for retrieval.
+WHAT THIS DOES:
+Takes extracted text from PDF documents and converts them into a format that can be
+searched using AI (semantic search). Think of it like creating an index at the back
+of a book, but using AI to understand meaning instead of just keywords.
+
+THE PROCESS:
+1. Receives text that was extracted from a PDF
+2. Breaks the text into small chunks (paragraphs, ~400 tokens each)
+3. Converts each chunk into a vector (a list of 384 numbers that represents the meaning)
+4. Stores these vectors in a database (Qdrant)
+5. Later, when someone asks a question, we can find similar vectors to answer them
+
+WHY WE DO THIS:
+- Can't feed entire 100-page document to AI (too big)
+- Breaking into chunks lets us find the exact relevant section
+- Vectors capture MEANING, not just keywords (understands "car" ≈ "automobile")
+- Much faster than reading entire document every time
+
+TECHNICAL DETAILS:
+- Uses all-MiniLM-L6-v2 model (converts text → 384 numbers)
+- Stores in Qdrant vector database (optimized for similarity search)
+- Preserves metadata (title, page number, URL) for citations
 """
 
 import os
@@ -10,17 +30,19 @@ import json
 import logging
 import time
 from typing import List, Dict, Any
-from datetime import datetime
-
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
-
-from common.events import create_chunks_indexed_event, create_indexing_failed_event
+from common.events import (
+    create_chunks_indexed_event,
+    create_indexing_failed_event,
+    ROUTING_KEY_INDEXED,
+    ROUTING_KEY_INDEXING_FAILED
+)
 from common.mq import RabbitMQEventBroker
 
-# Configure logging
+# Set up logging so we can see what's happening
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -28,83 +50,52 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def chunk_document(text: str, metadata: dict, max_tokens: int = 400) -> List[Dict[str, Any]]:
-    """
-    Semantic paragraph chunking following professor's Slide 8 algorithm.
-
-    This strategy preserves MARP regulation structure by respecting paragraph
-    boundaries. Regulations are organized as paragraphs, so this maintains
-    semantic meaning and regulation boundaries.
-
-    Args:
-        text: Full document text to chunk
-        metadata: Document metadata (title, page, url) to attach to each chunk
-        max_tokens: Maximum tokens per chunk (default 400, range 200-500)
-
-    Returns:
-        List of chunks, each with text and metadata
-    """
-    # Split document into paragraphs
-    paragraphs = text.split('\n\n')
-    chunks = []
-    current_chunk = ""
-
-    for para in paragraphs:
-        # Skip empty paragraphs
-        if not para.strip():
-            continue
-
-        # Estimate token count (rough approximation: 1 token ≈ 4 characters)
-        para_tokens = len(para) // 4
-        current_tokens = len(current_chunk) // 4
-
-        # If adding this paragraph exceeds limit and we have content, save current chunk
-        if current_tokens + para_tokens > max_tokens and current_chunk:
-            chunks.append({
-                "text": current_chunk.strip(),
-                "metadata": metadata.copy()
-            })
-            current_chunk = para
-        else:
-            # Add paragraph to current chunk
-            current_chunk += "\n\n" + para if current_chunk else para
-
-    # Don't forget the last chunk!
-    if current_chunk.strip():
-        chunks.append({
-            "text": current_chunk.strip(),
-            "metadata": metadata.copy()
-        })
-
-    logger.info(f"Chunked document into {len(chunks)} semantic chunks")
-    return chunks
-
+# ============================================================================
+# INDEXING SERVICE CLASS - The Main Service That Does All The Work
+# ============================================================================
 
 class IndexingService:
     """
-    Indexing Service - Handles document chunking, embedding, and vector storage.
+    The main service that handles document indexing.
 
-    Responsibilities:
-    - Chunk documents using semantic paragraph-based strategy
-    - Generate embeddings using sentence-transformers
-    - Store vectors with metadata in Qdrant
-    - Publish ChunksIndexed events
+    RESPONSIBILITIES:
+    1. Load the AI model (happens once when service starts)
+    2. Connect to Qdrant database (vector storage)
+    3. Process documents: chunk → embed → store
+    4. Publish events to notify other services
     """
 
+    # ========================================================================
+    # INITIALIZATION - Setup (Runs Once When Service Starts)
+    # ========================================================================
+
     def __init__(self):
-        """Initialize the indexing service with embedding model and Qdrant client."""
+        """
+        Initialize the indexing service - this runs ONCE when the service starts.
+
+        WHAT HAPPENS HERE:
+        1. Connect to RabbitMQ (for sending messages to other services)
+        2. Load the AI model (all-MiniLM-L6-v2) - takes ~30 seconds
+        3. Connect to Qdrant database (where we store vectors)
+        4. Create the database collection if it doesn't exist
+
+        WHY WE DO THIS IN INIT:
+        Loading the AI model is SLOW (30 seconds). By doing it once here,
+        every document after that processes FAST (reuses the loaded model).
+        """
         logger.info("Initializing Indexing Service...")
 
-        # RabbitMQ configuration
+        # Get RabbitMQ connection settings from environment variables
+        # (Docker sets these for us)
         self.rabbitmq_host = os.getenv("RABBITMQ_HOST", "localhost")
         self.rabbitmq_port = int(os.getenv("RABBITMQ_PORT", "5672"))
         self.rabbitmq_user = os.getenv("RABBITMQ_USER", "guest")
         self.rabbitmq_password = os.getenv("RABBITMQ_PASSWORD", "guest")
 
-        # Storage configuration
+        # Get storage path (where we save files)
         self.storage_path = os.getenv("STORAGE_PATH", "/app/storage/extracted")
 
-        # Initialize event broker
+        # Connect to RabbitMQ (so we can send messages to other services)
         self.event_broker = RabbitMQEventBroker(
             host=self.rabbitmq_host,
             port=self.rabbitmq_port,
@@ -112,250 +103,405 @@ class IndexingService:
             password=self.rabbitmq_password
         )
 
-        # Load embedding model (sentence-transformers/all-MiniLM-L6-v2)
-        # This model provides 384-dimensional embeddings
+        # Load the AI embedding model
+        # This is a pre-trained model that converts text into vectors (lists of numbers)
+        # all-MiniLM-L6-v2 creates 384-dimensional vectors (384 numbers per chunk)
         logger.info("Loading embedding model: all-MiniLM-L6-v2")
         self.model = SentenceTransformer('all-MiniLM-L6-v2')
         logger.info("Embedding model loaded successfully")
 
-        # Initialize Qdrant client with retry logic
+        # Connect to Qdrant (the vector database)
+        # Qdrant is specialized for storing and searching vectors
         qdrant_host = os.getenv("QDRANT_HOST", "qdrant")
         qdrant_port = int(os.getenv("QDRANT_PORT", "6333"))
         logger.info(f"Connecting to Qdrant at {qdrant_host}:{qdrant_port}")
 
-        # Retry connection to Qdrant (it may not be ready immediately)
+        # Retry logic: Qdrant might not be ready immediately on startup
+        # Try up to 10 times with 2-second delays between attempts
         max_retries = 10
-        retry_delay = 2  # seconds
+        retry_delay = 2
         for attempt in range(max_retries):
             try:
+                # Create connection to Qdrant
                 self.qdrant = QdrantClient(host=qdrant_host, port=qdrant_port)
-                # Test connection by getting collections
+                # Test the connection by trying to get collections
                 self.qdrant.get_collections()
                 logger.info("Successfully connected to Qdrant")
-                break
+                break  # Connection successful, exit the retry loop
             except Exception as e:
                 if attempt < max_retries - 1:
+                    # Not the last attempt - wait and retry
                     logger.warning(f"Qdrant not ready (attempt {attempt + 1}/{max_retries}): {e}")
                     logger.info(f"Retrying in {retry_delay} seconds...")
                     time.sleep(retry_delay)
                 else:
+                    # Last attempt failed - give up
                     logger.error(f"Failed to connect to Qdrant after {max_retries} attempts")
-                    raise
+                    raise  # Re-raise the exception
 
-        # Collection configuration
+        # Configure the Qdrant collection
+        # Collection = like a database table, stores all our document vectors
         self.collection_name = "marp-documents"
-        self.vector_size = 384  # all-MiniLM-L6-v2 dimensions
+        self.vector_size = 384  # all-MiniLM-L6-v2 creates 384-dimensional vectors
 
-        # Setup Qdrant collection
+        # Create the collection if it doesn't exist
         self._setup_qdrant_collection()
 
         logger.info("Indexing Service initialized successfully")
 
     def _setup_qdrant_collection(self):
-        """Create Qdrant collection if it doesn't exist."""
+        """
+        Create the Qdrant collection (database table) if it doesn't exist.
+
+        WHAT IS A COLLECTION:
+        Think of it like a database table. It stores all our vectors with their metadata.
+        Each collection has a specific vector size (384 in our case).
+
+        PARAMETERS:
+        - collection_name: "marp-documents" (where we store all MARP document vectors)
+        - vector_size: 384 (must match our embedding model's output)
+        - distance: COSINE (how we measure similarity between vectors)
+        """
         try:
-            # Try to create collection (simpler approach)
+            # Try to create the collection
             logger.info(f"Creating collection '{self.collection_name}'")
             self.qdrant.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(
-                    size=self.vector_size,
-                    distance=Distance.COSINE
+                    size=self.vector_size,        # Vectors are 384 numbers long
+                    distance=Distance.COSINE       # Use cosine similarity for search
                 )
             )
             logger.info(f"Collection '{self.collection_name}' created successfully")
         except Exception as e:
-            # Collection likely already exists, which is fine
+            # Collection might already exist from a previous run - that's OK!
             if "already exists" in str(e):
                 logger.info(f"Collection '{self.collection_name}' already exists")
             else:
-                # Re-raise if it's a different error
+                # Some other error - log it but continue anyway
                 logger.warning(f"Qdrant collection setup warning: {str(e)}")
                 logger.info(f"Continuing anyway - collection should be usable")
 
-    def generate_embeddings(self, texts: List[str]) -> np.ndarray:
-        """
-        Generate embeddings for a list of text chunks.
-
-        Args:
-            texts: List of text strings to embed
-
-        Returns:
-            Numpy array of embeddings (shape: num_texts x 384)
-        """
-        logger.info(f"Generating embeddings for {len(texts)} chunks")
-        embeddings = self.model.encode(texts, batch_size=32, show_progress_bar=False)
-        logger.info(f"Generated embeddings with shape {embeddings.shape}")
-        return embeddings
-
-    def store_chunks_in_qdrant(self, chunks: List[Dict[str, Any]],
-                               embeddings: np.ndarray, document_id: str):
-        """
-        Store chunks with their embeddings in Qdrant.
-
-        Args:
-            chunks: List of chunks with text and metadata
-            embeddings: Numpy array of embeddings
-            document_id: Unique document identifier
-        """
-        logger.info(f"Storing {len(chunks)} chunks in Qdrant for document {document_id}")
-
-        points = []
-        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-            # Create unique point ID
-            point_id_str = f"{document_id}_{idx}"
-            point_id = hash(point_id_str) % (2**63)  # Ensure positive 64-bit integer
-
-            # Create point with vector and payload
-            points.append(PointStruct(
-                id=point_id,
-                vector=embedding.tolist(),
-                payload={
-                    "text": chunk["text"],
-                    "document_id": document_id,
-                    "chunk_index": idx,
-                    "title": chunk["metadata"].get("title", ""),
-                    "page": chunk["metadata"].get("page", 0),
-                    "url": chunk["metadata"].get("url", "")
-                }
-            ))
-
-        # Upsert points to Qdrant
-        self.qdrant.upsert(
-            collection_name=self.collection_name,
-            points=points
-        )
-        logger.info(f"Successfully stored {len(points)} points in Qdrant")
-
-    def _read_pages(self, document_id: str) -> List[Dict[str, Any]]:
-        """
-        Read pages from storage/extracted/{documentId}/pages.jsonl
-
-        Args:
-            document_id: Document identifier
-
-        Returns:
-            List of page dictionaries with page number and text
-        """
-        pages_file = os.path.join(self.storage_path, document_id, "pages.jsonl")
-        logger.info(f"Reading pages from {pages_file}")
-
-        pages = []
-        with open(pages_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                page_data = json.loads(line.strip())
-                pages.append(page_data)
-
-        logger.info(f"Read {len(pages)} pages from {pages_file}")
-        return pages
-
-    def _save_chunks(self, document_id: str, chunks: List[Dict[str, Any]]):
-        """
-        Save chunks to storage/extracted/{documentId}/chunks.json for debugging.
-
-        Args:
-            document_id: Document identifier
-            chunks: List of chunks to save
-        """
-        chunks_file = os.path.join(self.storage_path, document_id, "chunks.json")
-        logger.info(f"Saving {len(chunks)} chunks to {chunks_file}")
-
-        with open(chunks_file, 'w', encoding='utf-8') as f:
-            json.dump(chunks, f, indent=2, ensure_ascii=False)
-
-        logger.info(f"Chunks saved to {chunks_file}")
-
-    def _save_event(self, document_id: str, event: Dict[str, Any], filename: str):
-        """
-        Save event to storage (event sourcing pattern).
-
-        Args:
-            document_id: Document identifier
-            event: Event dictionary
-            filename: Output filename (e.g., "indexed.json")
-        """
-        event_file = os.path.join(self.storage_path, document_id, filename)
-        logger.info(f"Saving event to {event_file}")
-
-        with open(event_file, 'w', encoding='utf-8') as f:
-            json.dump(event, f, indent=2, ensure_ascii=False)
-
-        logger.info(f"Event saved to {event_file}")
+    # ========================================================================
+    # MAIN ENTRY POINT - The Orchestrator Function (Called for Each Document)
+    # ========================================================================
 
     def handle_document_extracted_event(self, event: Dict[str, Any]):
         """
-        Handle DocumentExtracted event - chunk, embed, and index the document.
+        Main function that processes a document - this is called by worker.py.
 
-        Args:
-            event: DocumentExtracted event dictionary
+        THIS IS THE ORCHESTRATOR! It calls all the other functions in order:
+        1. Read the extracted pages from disk
+        2. Chunk each page into smaller pieces
+        3. Generate embeddings (vectors) for all chunks
+        4. Store the vectors in Qdrant database
+        5. Save chunks to disk (for debugging)
+        6. Publish success event to RabbitMQ
+
+        PARAMETERS:
+        - event: Dictionary containing document info (documentId, metadata, etc.)
+
+        ERROR HANDLING:
+        If anything goes wrong, we catch the error and publish an "IndexingFailed" event
+        so other services know something went wrong.
         """
         try:
+            # Extract document ID and correlation ID from the event
             document_id = event["payload"]["documentId"]
             correlation_id = event["correlationId"]
 
             logger.info(f"Processing DocumentExtracted event for document {document_id}")
 
-            # Read pages from storage
+            # STEP 1: Read the extracted pages from disk
+            # The extraction service already saved the text to:
+            # storage/extracted/{documentId}/pages.jsonl
             pages = self._read_pages(document_id)
 
-            # Get document metadata from event
+            # STEP 2: Get metadata from the event (we'll attach this to each chunk)
             doc_metadata = event["payload"]["metadata"]
             doc_title = doc_metadata.get("title", "Unknown")
-            doc_url = doc_metadata.get("url", "")
+            doc_url = event["payload"].get("url", "")
 
-            # Chunk each page with metadata preservation
+            # STEP 3: Chunk each page
+            # We loop through each page and break it into chunks
             all_chunks = []
             for page in pages:
                 page_num = page.get("page", 0)
                 page_text = page.get("text", "")
 
                 # Create metadata for this page's chunks
+                # This will be attached to every chunk from this page
                 chunk_metadata = {
-                    "title": doc_title,
-                    "page": page_num,
-                    "url": doc_url,
-                    "document_id": document_id
+                    "title": doc_title,        # Document title
+                    "page": page_num,          # Page number (for citations!)
+                    "url": doc_url,            # URL to the original PDF
+                    "document_id": document_id # Which document this came from
                 }
 
-                # Chunk the page text
-                page_chunks = chunk_document(page_text, chunk_metadata)
-                all_chunks.extend(page_chunks)
+                # Break this page into chunks using the chunking function
+                page_chunks = self.chunk_document(page_text, chunk_metadata)
+                all_chunks.extend(page_chunks)  # Add to our list of all chunks
 
             logger.info(f"Total chunks created: {len(all_chunks)}")
 
-            # Generate embeddings for all chunks
+            # STEP 4: Generate embeddings (vectors) for all chunks
+            # Extract just the text from each chunk (we'll embed the text)
             chunk_texts = [chunk["text"] for chunk in all_chunks]
+            # Convert all texts to vectors using the AI model
             embeddings = self.generate_embeddings(chunk_texts)
 
-            # Store in Qdrant
+            # STEP 5: Store everything in Qdrant
+            # This saves the vectors along with the text and metadata
             self.store_chunks_in_qdrant(all_chunks, embeddings, document_id)
 
-            # Save chunks to disk for debugging
+            # STEP 6: Save chunks to disk for debugging
+            # Helpful for seeing what chunks were created
             self._save_chunks(document_id, all_chunks)
 
-            # Publish ChunksIndexed event
+            # STEP 7: Publish success event
+            # Tell other services "I finished indexing this document!"
             self.publish_chunks_indexed_event(document_id, correlation_id, len(all_chunks))
 
             logger.info(f"Successfully indexed document {document_id}")
 
         except Exception as e:
+            # Something went wrong! Log the error and publish a failure event
             logger.error(f"Error processing DocumentExtracted event: {str(e)}", exc_info=True)
-            # Publish IndexingFailed event
+            # Publish IndexingFailed event so other services know it failed
             self._publish_indexing_failed_event(event, str(e))
+
+    # ========================================================================
+    # CORE OPERATIONS - Helper Functions Called by the Main Orchestrator
+    # ========================================================================
+
+    def chunk_document(self, text: str, metadata: dict, max_tokens: int = 200, overlap_tokens: int = 50) -> List[Dict[str, Any]]:
+        """
+        Break a document into overlapping chunks using actual token counting.
+
+        WHY WE CHUNK:
+        - AI models have token limits (can't process 100-page documents at once)
+        - Smaller chunks = more precise search results
+        - Overlapping chunks preserve context at boundaries
+
+        HOW IT WORKS:
+        1. Tokenize entire text using the model's actual tokenizer
+        2. Split tokens into overlapping chunks of max_tokens size
+        3. Each chunk overlaps with previous by overlap_tokens (25%)
+        4. Decode tokens back to text for each chunk
+        5. Attach metadata (title, page, url) to each chunk
+
+        WHY USE ACTUAL TOKENIZER:
+        - Character-based estimation (char/4) fails badly for punctuation-heavy content
+        - Table of contents with dots: "PR 3.2...." = 799 chars but 662 tokens!
+        - Proper tokenization ensures chunks stay under model's 256 token limit
+
+        PARAMETERS:
+        - text: The full page text to split up
+        - metadata: Info about the document (title, page number, url)
+        - max_tokens: Maximum size of each chunk (default 200 tokens, stays under model's 256 limit)
+        - overlap_tokens: Overlap between chunks (default 50 tokens = 25% overlap)
+
+        RETURNS:
+        - List of chunks, each with text and metadata
+        """
+        # Get the tokenizer from the loaded model
+        tokenizer = self.model.tokenizer
+
+        # Tokenize the entire text into token IDs
+        tokens = tokenizer.encode(text, add_special_tokens=False)
+
+        chunks = []
+        start_idx = 0
+
+        # Sliding window over tokens
+        while start_idx < len(tokens):
+            # Extract chunk of tokens (up to max_tokens)
+            end_idx = min(start_idx + max_tokens, len(tokens))
+            chunk_tokens = tokens[start_idx:end_idx]
+
+            # Decode tokens back to text
+            chunk_text = tokenizer.decode(chunk_tokens, skip_special_tokens=True).strip()
+
+            # Only add non-empty chunks
+            if chunk_text:
+                chunks.append({
+                    "text": chunk_text,
+                    "metadata": metadata.copy()
+                })
+
+            # Move window forward by (max_tokens - overlap_tokens)
+            # This creates the overlap between consecutive chunks
+            start_idx += (max_tokens - overlap_tokens)
+
+        logger.info(f"Chunked document into {len(chunks)} overlapping chunks")
+        return chunks
+
+    def _read_pages(self, document_id: str) -> List[Dict[str, Any]]:
+        """
+        Read the extracted pages from disk.
+
+        WHERE THE DATA COMES FROM:
+        The extraction service already processed the PDF and saved the text to:
+        storage/extracted/{documentId}/pages.jsonl
+
+        FILE FORMAT (JSONL):
+        Each line is a separate JSON object representing one page:
+        {"page": 1, "text": "This is the content of page 1..."}
+        {"page": 2, "text": "This is the content of page 2..."}
+
+        RETURNS:
+        List of page dictionaries: [{"page": 1, "text": "..."}, {"page": 2, "text": "..."}, ...]
+        """
+        # Build the path to the pages file
+        pages_file = os.path.join(self.storage_path, document_id, "pages.jsonl")
+        logger.info(f"Reading pages from {pages_file}")
+
+        # Read the file line by line (each line is one page)
+        pages = []
+        with open(pages_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                # Parse the JSON on this line
+                page_data = json.loads(line.strip())
+                pages.append(page_data)
+
+        logger.info(f"Read {len(pages)} pages from {pages_file}")
+        return pages
+
+    def generate_embeddings(self, texts: List[str]) -> np.ndarray:
+        """
+        Convert text chunks into vectors (embeddings) using AI.
+
+        WHAT IS AN EMBEDDING:
+        An embedding is a list of numbers that represents the MEANING of text.
+        Similar texts have similar numbers. For example:
+        - "car" and "automobile" would have very similar embeddings
+        - "car" and "pizza" would have very different embeddings
+
+        HOW IT WORKS:
+        We use a pre-trained AI model (all-MiniLM-L6-v2) that was trained on
+        millions of text examples to understand meaning.
+
+        PARAMETERS:
+        - texts: List of text strings (our chunks)
+
+        RETURNS:
+        - Numpy array of shape (num_chunks, 384)
+          Each chunk becomes 384 numbers
+        """
+        logger.info(f"Generating embeddings for {len(texts)} chunks")
+
+        # Use the AI model to convert all texts to vectors
+        # batch_size=32 means process 32 chunks at a time (for efficiency)
+        # show_progress_bar=False because we're logging ourselves
+        embeddings = self.model.encode(texts, batch_size=32, show_progress_bar=False)
+
+        logger.info(f"Generated embeddings with shape {embeddings.shape}")
+        return embeddings
+
+    def store_chunks_in_qdrant(self, chunks: List[Dict[str, Any]],
+                               embeddings: np.ndarray, document_id: str):
+        """
+        Store the chunks and their vectors in Qdrant database.
+
+        WHAT WE STORE:
+        For each chunk, we store:
+        1. The vector (384 numbers representing meaning)
+        2. The original text (so we can return it in search results)
+        3. Metadata (title, page number, URL for citations)
+
+        WHY QDRANT:
+        Qdrant is optimized for finding similar vectors FAST.
+        When someone searches, Qdrant can find the most similar chunks in milliseconds.
+
+        PARAMETERS:
+        - chunks: List of chunk dictionaries (with text and metadata)
+        - embeddings: Numpy array of vectors (one per chunk)
+        - document_id: Which document these chunks came from
+        """
+        logger.info(f"Storing {len(chunks)} chunks in Qdrant for document {document_id}")
+
+        # Build a list of "points" to insert into Qdrant
+        # Each point = one chunk with its vector and metadata
+        points = []
+        for idx, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            # Create a unique ID for this chunk
+            # Format: "documentId_0", "documentId_1", etc.
+            point_id_str = f"{document_id}_{idx}"
+            # Hash it to get a numeric ID (Qdrant requires numeric IDs)
+            # % (2**63) ensures it's a positive 64-bit integer
+            point_id = hash(point_id_str) % (2**63)
+
+            # Create a point (record) with vector and metadata
+            points.append(PointStruct(
+                id=point_id,                      # Unique numeric ID
+                vector=embedding.tolist(),        # Convert numpy array to list
+                payload={                         # Metadata attached to this vector
+                    "text": chunk["text"],        # Original text (for display)
+                    "document_id": document_id,   # Which document
+                    "chunk_index": idx,           # Which chunk number
+                    "title": chunk["metadata"].get("title", ""),     # Document title
+                    "page": chunk["metadata"].get("page", 0),        # Page number
+                    "url": chunk["metadata"].get("url", "")          # PDF URL
+                }
+            ))
+
+        # Insert (or update if exists) all points into Qdrant
+        # "upsert" = update if exists, insert if new
+        self.qdrant.upsert(
+            collection_name=self.collection_name,
+            points=points
+        )
+        logger.info(f"Successfully stored {len(points)} points in Qdrant")
+
+    def _save_chunks(self, document_id: str, chunks: List[Dict[str, Any]]):
+        """
+        Save chunks to disk as JSON for debugging/auditing.
+
+        WHY WE DO THIS:
+        It's helpful to see what chunks were created from a document.
+        This file lets us debug issues or see how the chunking worked.
+
+        FILE LOCATION:
+        storage/extracted/{documentId}/chunks.json
+        """
+        chunks_file = os.path.join(self.storage_path, document_id, "chunks.json")
+        logger.info(f"Saving {len(chunks)} chunks to {chunks_file}")
+
+        # Write the chunks as pretty-printed JSON
+        # indent=2 makes it readable
+        # ensure_ascii=False allows non-English characters
+        with open(chunks_file, 'w', encoding='utf-8') as f:
+            json.dump(chunks, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Chunks saved to {chunks_file}")
+
+    # ========================================================================
+    # EVENT PUBLISHING - Notifying Other Services
+    # ========================================================================
 
     def publish_chunks_indexed_event(self, document_id: str, correlation_id: str,
                                      chunk_count: int):
         """
-        Publish ChunksIndexed event to RabbitMQ.
+        Publish a success event to RabbitMQ saying "indexing is done!"
 
-        Args:
-            document_id: Document identifier
-            correlation_id: Correlation ID from original event
-            chunk_count: Number of chunks indexed
+        WHY WE PUBLISH EVENTS:
+        Other services need to know when indexing completes. For example,
+        the retrieval service can start using this document for searches.
+
+        WHAT'S IN THE EVENT:
+        - documentId: Which document we indexed
+        - chunkCount: How many chunks were created
+        - embeddingModel: Which AI model we used
+        - vectorDim: Size of vectors (384)
+        - indexName: Which collection in Qdrant
+
+        WHERE IT GOES:
+        Sent to RabbitMQ with routing_key="documents.indexed"
+        Other services listening to this routing key will receive it.
         """
         logger.info(f"Publishing ChunksIndexed event for document {document_id}")
 
-        # Create ChunksIndexed event using common helper
+        # Create the event using a helper function (standardizes the format)
         event = create_chunks_indexed_event(
             document_id=document_id,
             correlation_id=correlation_id,
@@ -365,12 +511,13 @@ class IndexingService:
             index_name=self.collection_name
         )
 
-        # Save event to storage (event sourcing)
+        # Save the event to disk (event sourcing - keeps a record of what happened)
         self._save_event(document_id, event, "indexed.json")
 
-        # Publish to RabbitMQ
+        # Publish the event to RabbitMQ
+        # Other services listening to "documents.indexed" will receive this
         self.event_broker.publish(
-            routing_key="documents.indexed",
+            routing_key=ROUTING_KEY_INDEXED,
             message=json.dumps(event)
         )
 
@@ -378,19 +525,25 @@ class IndexingService:
 
     def _publish_indexing_failed_event(self, original_event: Dict[str, Any], error_message: str):
         """
-        Publish IndexingFailed event when processing fails.
+        Publish a failure event when something goes wrong.
 
-        Args:
-            original_event: The original DocumentExtracted event
-            error_message: Error description
+        WHY THIS IS IMPORTANT:
+        If indexing fails, other services need to know so they can:
+        - Retry the document later
+        - Alert administrators
+        - Track failure rates
+
+        WHERE IT GOES:
+        Sent to RabbitMQ with routing_key="documents.indexing.failed"
         """
         try:
+            # Extract info from the original event
             document_id = original_event["payload"]["documentId"]
             correlation_id = original_event["correlationId"]
 
             logger.info(f"Publishing IndexingFailed event for document {document_id}")
 
-            # Create IndexingFailed event using common helper
+            # Create the failure event
             event = create_indexing_failed_event(
                 document_id=document_id,
                 correlation_id=correlation_id,
@@ -400,17 +553,57 @@ class IndexingService:
 
             # Publish to RabbitMQ
             self.event_broker.publish(
-                routing_key="documents.indexing.failed",
+                routing_key=ROUTING_KEY_INDEXING_FAILED,
                 message=json.dumps(event)
             )
 
             logger.info(f"IndexingFailed event published for document {document_id}")
 
         except Exception as e:
+            # If even the error publishing fails, just log it
+            # (Don't want to crash the whole service because error reporting failed)
             logger.error(f"Error publishing IndexingFailed event: {str(e)}", exc_info=True)
 
+    def _save_event(self, document_id: str, event: Dict[str, Any], filename: str):
+        """
+        Save an event to disk (event sourcing pattern).
+
+        WHAT IS EVENT SOURCING:
+        Instead of just storing the final state, we store every event that happened.
+        This creates an audit trail: we can see exactly what happened and when.
+
+        FILES SAVED:
+        - indexed.json: When indexing succeeds
+        - failed.json: When indexing fails (not currently used but could be added)
+
+        WHY THIS IS USEFUL:
+        - Debugging: see exactly what events occurred
+        - Auditing: track what documents were processed
+        - Recovery: can replay events if needed
+        """
+        event_file = os.path.join(self.storage_path, document_id, filename)
+        logger.info(f"Saving event to {event_file}")
+
+        # Write the event as JSON
+        with open(event_file, 'w', encoding='utf-8') as f:
+            json.dump(event, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Event saved to {event_file}")
+
+    # ========================================================================
+    # CLEANUP - Shutting Down Gracefully
+    # ========================================================================
+
     def close(self):
-        """Clean up resources."""
+        """
+        Close connections when shutting down.
+
+        WHEN THIS IS CALLED:
+        When the service is shutting down (Ctrl+C or Docker stop).
+
+        WHAT IT DOES:
+        Closes the RabbitMQ connection cleanly (doesn't leave orphaned connections).
+        """
         logger.info("Closing Indexing Service")
         if self.event_broker:
             self.event_broker.close()

@@ -26,24 +26,38 @@ def create_document_discovered_event(
     title: str,
     url: str,
     file_size: int,
-    correlation_id: Optional[str] = None
+    correlation_id: Optional[str] = None,
+    original_url: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Create a DocumentDiscovered event.
-    
+
     Published by: Ingestion Service
     Consumed by: Extraction Service
-    
+
     Args:
         document_id: Unique document identifier
         title: Document title
-        url: URL or path to the PDF
+        url: URL or path to the PDF (local file path)
         file_size: Size of the PDF in bytes
         correlation_id: Optional correlation ID (generated if not provided)
-    
+        original_url: Optional original web URL (if url is a local path)
+
     Returns:
         DocumentDiscovered event dictionary
     """
+    payload = {
+        "documentId": document_id,
+        "title": title,
+        "url": url,
+        "discoveredAt": get_utc_timestamp(),
+        "fileSize": file_size
+    }
+
+    # Add originalUrl if provided
+    if original_url:
+        payload["originalUrl"] = original_url
+
     return {
         "eventType": "DocumentDiscovered",
         "eventId": generate_event_id(),
@@ -51,13 +65,7 @@ def create_document_discovered_event(
         "correlationId": correlation_id or generate_event_id(),
         "source": "ingestion-service",
         "version": "1.0",
-        "payload": {
-            "documentId": document_id,
-            "title": title,
-            "url": url,
-            "discoveredAt": get_utc_timestamp(),
-            "fileSize": file_size
-        }
+        "payload": payload
     }
 
 
@@ -67,7 +75,9 @@ def create_document_extracted_event(
     page_count: int,
     text_extracted: bool,
     pdf_metadata: Dict[str, Any],
-    extraction_method: str = "pdfplumber"
+    extraction_method: str = "pdfplumber",
+    url: Optional[str] = None,
+    pages_ref: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Create a DocumentExtracted event.
@@ -82,10 +92,29 @@ def create_document_extracted_event(
         text_extracted: Whether text was successfully extracted
         pdf_metadata: PDF's internal metadata (title, author, year, subject, etc.)
         extraction_method: Method used for extraction (default: pdfplumber)
+        url: Optional original URL to the source document
+        pages_ref: Optional reference to pages.jsonl file location
 
     Returns:
         DocumentExtracted event dictionary
     """
+    payload = {
+        "documentId": document_id,
+        "textExtracted": text_extracted,
+        "pageCount": page_count,
+        "metadata": pdf_metadata,  # PDF's internal metadata
+        "extractedAt": get_utc_timestamp(),
+        "extractionMethod": extraction_method
+    }
+
+    # Add URL if provided
+    if url:
+        payload["url"] = url
+
+    # Add pagesRef if provided
+    if pages_ref:
+        payload["pagesRef"] = pages_ref
+
     return {
         "eventType": "DocumentExtracted",
         "eventId": generate_event_id(),
@@ -93,14 +122,7 @@ def create_document_extracted_event(
         "correlationId": correlation_id,
         "source": "extraction-service",
         "version": "1.0",
-        "payload": {
-            "documentId": document_id,
-            "textExtracted": text_extracted,
-            "pageCount": page_count,
-            "metadata": pdf_metadata,  # PDF's internal metadata
-            "extractedAt": get_utc_timestamp(),
-            "extractionMethod": extraction_method
-        }
+        "payload": payload
     }
 
 
@@ -184,6 +206,43 @@ def create_extraction_failed_event(
     }
 
 
+def create_ingestion_failed_event(
+    document_id: str,
+    correlation_id: str,
+    error_message: str,
+    error_type: str = "IngestionError"
+) -> Dict[str, Any]:
+    """
+    Create an IngestionFailed event (for error handling).
+
+    Published by: Ingestion Service (when ingestion fails)
+    Consumed by: Monitoring/Alerting services
+
+    Args:
+        document_id: Document identifier
+        correlation_id: Correlation ID from DocumentDiscovered
+        error_message: Description of the error
+        error_type: Type of error (IngestionError, FetchError, etc.)
+
+    Returns:
+        IngestionFailed event dictionary
+    """
+    return {
+        "eventType": "IngestionFailed",
+        "eventId": generate_event_id(),
+        "timestamp": get_utc_timestamp(),
+        "correlationId": correlation_id,
+        "source": "ingestion-service",
+        "version": "1.0",
+        "payload": {
+            "documentId": document_id,
+            "errorType": error_type,
+            "errorMessage": error_message,
+            "failedAt": get_utc_timestamp()
+        }
+    }
+
+
 def create_indexing_failed_event(
     document_id: str,
     correlation_id: str,
@@ -192,16 +251,16 @@ def create_indexing_failed_event(
 ) -> Dict[str, Any]:
     """
     Create an IndexingFailed event (for error handling).
-    
+
     Published by: Indexing Service (when indexing fails)
     Consumed by: Monitoring/Alerting services
-    
+
     Args:
         document_id: Document identifier
         correlation_id: Correlation ID from previous events
         error_message: Description of the error
         error_type: Type of error (IndexingError, VectorDBError, etc.)
-    
+
     Returns:
         IndexingFailed event dictionary
     """
@@ -221,16 +280,51 @@ def create_indexing_failed_event(
     }
 
 
-# ============================================================================
-# Event Type Constants (for consistency)
-# ============================================================================
+# ----------------------------------------------------------------------------
+# Retrieval Events
+# ----------------------------------------------------------------------------
 
-EVENT_DOCUMENT_DISCOVERED = "DocumentDiscovered"
-EVENT_DOCUMENT_EXTRACTED = "DocumentExtracted"
-EVENT_CHUNKS_INDEXED = "ChunksIndexed"
-EVENT_EXTRACTION_FAILED = "ExtractionFailed"
-EVENT_INDEXING_FAILED = "IndexingFailed"
+def create_retrieval_completed_event(
+    query: str,
+    top_k: int,
+    result_count: int,
+    latency_ms: float,
+    results_summary: Optional[list] = None,
+    correlation_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Create a RetrievalCompleted event (for analytics/monitoring).
 
+    Published by: Retrieval Service
+    Consumed by: Monitoring/Analytics services
+
+    Args:
+        query: Original user query string
+        top_k: Requested number of results
+        result_count: Number of results returned
+        latency_ms: End-to-end retrieval latency in milliseconds
+        results_summary: Optional lightweight list of results metadata, e.g.,
+            [{"documentId": str, "chunkIndex": int, "score": float}]
+        correlation_id: Optional correlation ID (generated if not provided)
+
+    Returns:
+        RetrievalCompleted event dictionary
+    """
+    return {
+        "eventType": "RetrievalCompleted",
+        "eventId": generate_event_id(),
+        "timestamp": get_utc_timestamp(),
+        "correlationId": correlation_id or generate_event_id(),
+        "source": "retrieval-service",
+        "version": "1.0",
+        "payload": {
+            "query": query,
+            "topK": top_k,
+            "resultCount": result_count,
+            "latencyMs": latency_ms,
+            "results": results_summary or []
+        }
+    }
 
 # ============================================================================
 # RabbitMQ Routing Keys (for consistency)
@@ -239,59 +333,7 @@ EVENT_INDEXING_FAILED = "IndexingFailed"
 ROUTING_KEY_DISCOVERED = "documents.discovered"
 ROUTING_KEY_EXTRACTED = "documents.extracted"
 ROUTING_KEY_INDEXED = "documents.indexed"
+ROUTING_KEY_INGESTION_FAILED = "documents.ingestion.failed"
 ROUTING_KEY_EXTRACTION_FAILED = "documents.extraction.failed"
 ROUTING_KEY_INDEXING_FAILED = "documents.indexing.failed"
-
-
-# ============================================================================
-# Validation Functions
-# ============================================================================
-
-def validate_event_structure(event: Dict[str, Any]) -> bool:
-    """
-    Validate that an event has the required structure.
-    
-    Args:
-        event: Event dictionary to validate
-    
-    Returns:
-        True if valid, False otherwise
-    """
-    required_fields = ["eventType", "eventId", "timestamp", "correlationId", "source", "version", "payload"]
-    
-    for field in required_fields:
-        if field not in event:
-            return False
-    
-    # Check that IDs are UUIDs (basic check)
-    if not isinstance(event["eventId"], str) or len(event["eventId"]) < 32:
-        return False
-    
-    return True
-
-
-def extract_correlation_id(event: Dict[str, Any]) -> Optional[str]:
-    """
-    Safely extract correlation ID from an event.
-    
-    Args:
-        event: Event dictionary
-    
-    Returns:
-        Correlation ID if found, None otherwise
-    """
-    return event.get("correlationId")
-
-
-def extract_document_id(event: Dict[str, Any]) -> Optional[str]:
-    """
-    Safely extract document ID from an event's payload.
-    
-    Args:
-        event: Event dictionary
-    
-    Returns:
-        Document ID if found, None otherwise
-    """
-    payload = event.get("payload", {})
-    return payload.get("documentId")
+ROUTING_KEY_RETRIEVAL_COMPLETED = "retrieval.completed"
