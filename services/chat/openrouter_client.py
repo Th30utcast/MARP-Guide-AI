@@ -3,6 +3,7 @@ OpenRouter Client Module
 Handles LLM API calls for answer generation 
 """
 import logging
+import httpx
 from openai import OpenAI
 from typing import Optional
 import config
@@ -40,9 +41,22 @@ class OpenRouterClient:
             raise ValueError("OpenRouter API key not configured. Set OPENROUTER_API_KEY environment variable.")
 
         # Initialize OpenAI client with OpenRouter base URL
+        # Store headers for OpenRouter free models (sent with each request)
+        self.headers = {
+            "HTTP-Referer": "https://github.com/Th30utcast/MARP-Guide-AI",
+            "X-Title": "MARP Guide AI"
+        }
+        
+        # Create httpx client with default headers
+        http_client = httpx.Client(
+            headers=self.headers,
+            timeout=60.0
+        )
+        
         self.client = OpenAI(
             base_url=config.OPENROUTER_BASE_URL,
-            api_key=self.api_key
+            api_key=self.api_key,
+            http_client=http_client
         )
 
         logger.info(f"✅ OpenRouter client initialized | Model: {self.model}")
