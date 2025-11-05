@@ -14,7 +14,6 @@ HOW IT WORKS:
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -24,7 +23,8 @@ current_dir = Path(__file__).resolve().parent
 project_root = current_dir
 sys.path.insert(0, str(project_root))
 
-from common.mq import RabbitMQEventBroker
+from common.config import get_rabbitmq_broker
+from common.events import ROUTING_KEY_EXTRACTED, ROUTING_KEY_INDEXED, ROUTING_KEY_INDEXING_FAILED
 from common.health import start_health_server
 from common.logging_config import setup_logging
 from indexing_service import IndexingService
@@ -126,13 +126,8 @@ if __name__ == "__main__":
     # STEP 1: CONNECT TO RABBITMQ (The Message Broker)
     # ========================================================================
     try:
-        # Read connection settings from environment variables (set by Docker)
-        broker = RabbitMQEventBroker(
-            host=os.getenv("RABBITMQ_HOST", "localhost"),      # Where is RabbitMQ?
-            port=int(os.getenv("RABBITMQ_PORT", 5672)),        # What port?
-            username=os.getenv("RABBITMQ_USER", "guest"),      # Login username
-            password=os.getenv("RABBITMQ_PASSWORD", "guest")   # Login password
-        )
+        # Get configured RabbitMQ broker from centralized config
+        broker = get_rabbitmq_broker()
         logger.info("✅ Connected to RabbitMQ")
     except Exception as e:
         # Connection failed
@@ -145,13 +140,13 @@ if __name__ == "__main__":
     # ========================================================================
     try:
         # Create the inbox queue (where extraction service sends us messages)
-        broker.declare_queue("documents.extracted")
+        broker.declare_queue(ROUTING_KEY_EXTRACTED)
 
         # Create the outbox queue (where we send success notifications)
-        broker.declare_queue("documents.indexed")
+        broker.declare_queue(ROUTING_KEY_INDEXED)
 
         # Create the failure queue (where we send failure notifications)
-        broker.declare_queue("documents.indexing.failed")
+        broker.declare_queue(ROUTING_KEY_INDEXING_FAILED)
 
         # Set up the routing system (exchange + bindings)
         if broker.channel:
@@ -167,8 +162,8 @@ if __name__ == "__main__":
             # it will arrive in our inbox
             broker.channel.queue_bind(
                 exchange="events",
-                queue="documents.extracted",
-                routing_key="documents.extracted"
+                queue=ROUTING_KEY_EXTRACTED,
+                routing_key=ROUTING_KEY_EXTRACTED
             )
 
             # Connect "documents.indexed" queue to the exchange
@@ -176,8 +171,8 @@ if __name__ == "__main__":
             # they'll go to this queue
             broker.channel.queue_bind(
                 exchange="events",
-                queue="documents.indexed",
-                routing_key="documents.indexed"
+                queue=ROUTING_KEY_INDEXED,
+                routing_key=ROUTING_KEY_INDEXED
             )
 
             # Connect "documents.indexing.failed" queue to the exchange
@@ -185,8 +180,8 @@ if __name__ == "__main__":
             # they'll go to this queue for monitoring
             broker.channel.queue_bind(
                 exchange="events",
-                queue="documents.indexing.failed",
-                routing_key="documents.indexing.failed"
+                queue=ROUTING_KEY_INDEXING_FAILED,
+                routing_key=ROUTING_KEY_INDEXING_FAILED
             )
         logger.info("✅ Queues and exchange configured")
     except Exception as e:
@@ -228,7 +223,7 @@ if __name__ == "__main__":
         # Start consuming messages from the "documents.extracted" queue
         # Every time a message arrives, RabbitMQ will call process_document_extracted()
         broker.consume(
-            queue_name="documents.extracted",          # Which queue to listen to
+            queue_name=ROUTING_KEY_EXTRACTED,          # Which queue to listen to
             callback=process_document_extracted,       # What function to call for each message
             auto_ack=False                            # We'll manually acknowledge (for reliability)
         )

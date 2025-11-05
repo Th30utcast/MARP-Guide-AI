@@ -18,7 +18,6 @@ Health Check:
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -27,7 +26,8 @@ current_dir = Path(__file__).resolve().parent
 project_root = current_dir
 sys.path.insert(0, str(project_root))
 
-from common.mq import RabbitMQEventBroker
+from common.config import get_rabbitmq_broker, get_storage_path
+from common.events import ROUTING_KEY_DISCOVERED, ROUTING_KEY_EXTRACTED, ROUTING_KEY_EXTRACTION_FAILED
 from common.health import start_health_server
 from common.logging_config import setup_logging
 from extraction_service import ExtractionService
@@ -86,26 +86,21 @@ def process_document_discovered(ch, method, properties, body):
 
 if __name__ == "__main__":
     logger.info("🚀 Initializing Extraction Service Worker...")
-    
+
     # Initialize event broker
     try:
-        broker = RabbitMQEventBroker(
-            host=os.getenv("RABBITMQ_HOST", "localhost"),
-            port=int(os.getenv("RABBITMQ_PORT", 5672)),
-            username=os.getenv("RABBITMQ_USER", "guest"),
-            password=os.getenv("RABBITMQ_PASSWORD", "guest")
-        )
+        broker = get_rabbitmq_broker()
         logger.info("✅ Connected to RabbitMQ")
     except Exception as e:
         logger.error(f"❌ Failed to connect to RabbitMQ: {e}")
         logger.info("💡 Make sure RabbitMQ is running: docker-compose up -d rabbitmq")
         sys.exit(1)
-    
+
     # Declare queues and exchange
     try:
-        broker.declare_queue("documents.discovered")
-        broker.declare_queue("documents.extracted")
-        broker.declare_queue("documents.extraction.failed")
+        broker.declare_queue(ROUTING_KEY_DISCOVERED)
+        broker.declare_queue(ROUTING_KEY_EXTRACTED)
+        broker.declare_queue(ROUTING_KEY_EXTRACTION_FAILED)
 
         if broker.channel:
             broker.channel.exchange_declare(
@@ -115,27 +110,26 @@ if __name__ == "__main__":
             )
             broker.channel.queue_bind(
                 exchange="events",
-                queue="documents.discovered",
-                routing_key="documents.discovered"
+                queue=ROUTING_KEY_DISCOVERED,
+                routing_key=ROUTING_KEY_DISCOVERED
             )
             broker.channel.queue_bind(
                 exchange="events",
-                queue="documents.extracted",
-                routing_key="documents.extracted"
+                queue=ROUTING_KEY_EXTRACTED,
+                routing_key=ROUTING_KEY_EXTRACTED
             )
             broker.channel.queue_bind(
                 exchange="events",
-                queue="documents.extraction.failed",
-                routing_key="documents.extraction.failed"
+                queue=ROUTING_KEY_EXTRACTION_FAILED,
+                routing_key=ROUTING_KEY_EXTRACTION_FAILED
             )
         logger.info("✅ Queues and exchange configured")
     except Exception as e:
         logger.error(f"❌ Failed to configure queues: {e}")
         sys.exit(1)
-    
+
     # Initialize extraction service with storage path
-    #! NOTE: Storage path is relative to project root
-    storage_path = project_root / "storage" / "extracted"
+    storage_path = get_storage_path()
     extraction_service = ExtractionService(
         event_broker=broker,
         storage_path=str(storage_path)
@@ -147,10 +141,10 @@ if __name__ == "__main__":
 
     logger.info("👂 Listening for DocumentDiscovered events...")
     logger.info("Press Ctrl+C to stop")
-    
+
     try:
         broker.consume(
-            queue_name="documents.discovered",
+            queue_name=ROUTING_KEY_DISCOVERED,
             callback=process_document_discovered,
             auto_ack=False
         )
