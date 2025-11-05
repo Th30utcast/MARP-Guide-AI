@@ -36,9 +36,6 @@ logger = setup_logging(__name__)
 
 def process_document_discovered(ch, method, properties, body):
     """
-    Callback for processing DocumentDiscovered events.
-
-    Resilience Strategy:
     - Failed extractions publish ExtractionFailed events for monitoring
     - Messages are always acknowledged (removed from queue) to prevent infinite loops
     - Processing continues with next document even if current one fails

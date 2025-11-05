@@ -1,10 +1,3 @@
-"""
-Centralized configuration module for MARP-Guide-AI services.
-
-This module provides a single source of configuration for all workers,
-loading environment variables with sensible defaults for development.
-"""
-
 import os
 from pathlib import Path
 from typing import Optional
@@ -23,12 +16,7 @@ RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 
 
 def get_rabbitmq_broker() -> RabbitMQEventBroker:
-    """
-    Create and return a configured RabbitMQ event broker instance.
-
-    Returns:
-        RabbitMQEventBroker: Configured broker instance
-    """
+    # Create and return a configured RabbitMQ event broker instance.
     return RabbitMQEventBroker(
         host=RABBITMQ_HOST,
         port=RABBITMQ_PORT,
@@ -46,15 +34,6 @@ PDF_OUTPUT_DIR = os.getenv("PDF_OUTPUT_DIR", "/app/pdfs")
 
 
 def get_storage_path(create: bool = True) -> Path:
-    """
-    Get the storage path for extracted documents.
-
-    Args:
-        create: Whether to create the directory if it doesn't exist
-
-    Returns:
-        Path: Storage path as a Path object
-    """
     path = Path(STORAGE_PATH)
     if create:
         path.mkdir(parents=True, exist_ok=True)
@@ -62,15 +41,6 @@ def get_storage_path(create: bool = True) -> Path:
 
 
 def get_pdf_output_dir(create: bool = True) -> Path:
-    """
-    Get the output directory for downloaded PDFs.
-
-    Args:
-        create: Whether to create the directory if it doesn't exist
-
-    Returns:
-        Path: PDF output directory as a Path object
-    """
     path = Path(PDF_OUTPUT_DIR)
     if create:
         path.mkdir(parents=True, exist_ok=True)

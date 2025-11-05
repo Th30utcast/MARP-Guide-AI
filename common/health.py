@@ -26,18 +26,12 @@ logger = logging.getLogger(__name__)
 
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
-    """
-    HTTP handler for health check endpoints.
-
-    Responds to GET /health with service status and RabbitMQ connection state.
-    """
-
     # Class variables set by start_health_server()
     broker = None
     service_name = "service"
 
     def do_GET(self):
-        """Handle GET requests to /health endpoint."""
+        # Handle GET requests to /health endpoint.
         if self.path == '/health':
             # Check if broker is connected
             is_healthy = (
@@ -73,29 +67,17 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def log_message(self, format, *args):
-        """Suppress default HTTP server logging (too noisy)."""
+        # Suppress default HTTP server logging (too noisy).
         pass
 
 
 def start_health_server(broker, service_name: str = "service", port: int = 8080):
-    """
-    Start a lightweight HTTP health check server in a background thread.
-
-    Args:
-        broker: RabbitMQEventBroker instance to check connection status
-        service_name: Name of the service (appears in health check response)
-        port: Port to run the health check server on (default: 8080)
-
-    The server runs in a daemon thread so it automatically stops when the
-    main process exits. It responds to GET /health requests with JSON
-    containing the service status and RabbitMQ connection state.
-    """
     # Configure the handler with broker and service name
     HealthCheckHandler.broker = broker
     HealthCheckHandler.service_name = service_name
 
     def run_server():
-        """Background thread function that runs the HTTP server."""
+        # Background thread function that runs the HTTP server.
         try:
             server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
             logger.info(f"✅ Health check server started on port {port}")

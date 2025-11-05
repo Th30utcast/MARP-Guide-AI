@@ -1,23 +1,15 @@
-"""
-Event schemas and utilities for MARP Guide AI.
-All events follow the standard schema with past-tense naming.
-
-This module provides helper functions to create properly formatted events
-for the entire pipeline: Ingestion → Extraction → Indexing
-"""
-
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 
 def generate_event_id() -> str:
-    """Generate a unique event ID."""
+    # Generate a unique event ID
     return str(uuid.uuid4())
 
 
 def get_utc_timestamp() -> str:
-    """Get current UTC timestamp in ISO 8601 format."""
+    # Get current UTC timestamp in ISO 8601 format
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
@@ -29,23 +21,6 @@ def create_document_discovered_event(
     correlation_id: Optional[str] = None,
     original_url: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Create a DocumentDiscovered event.
-
-    Published by: Ingestion Service
-    Consumed by: Extraction Service
-
-    Args:
-        document_id: Unique document identifier
-        title: Document title
-        url: URL or path to the PDF (local file path)
-        file_size: Size of the PDF in bytes
-        correlation_id: Optional correlation ID (generated if not provided)
-        original_url: Optional original web URL (if url is a local path)
-
-    Returns:
-        DocumentDiscovered event dictionary
-    """
     payload = {
         "documentId": document_id,
         "title": title,
@@ -79,25 +54,6 @@ def create_document_extracted_event(
     url: Optional[str] = None,
     pages_ref: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Create a DocumentExtracted event.
-
-    Published by: Extraction Service
-    Consumed by: Indexing Service
-
-    Args:
-        document_id: Document identifier
-        correlation_id: Correlation ID from DocumentDiscovered event
-        page_count: Number of pages in document
-        text_extracted: Whether text was successfully extracted
-        pdf_metadata: PDF's internal metadata (title, author, year, subject, etc.)
-        extraction_method: Method used for extraction (default: pdfplumber)
-        url: Optional original URL to the source document
-        pages_ref: Optional reference to pages.jsonl file location
-
-    Returns:
-        DocumentExtracted event dictionary
-    """
     payload = {
         "documentId": document_id,
         "textExtracted": text_extracted,
@@ -134,23 +90,6 @@ def create_chunks_indexed_event(
     vector_dim: int,
     index_name: Optional[str] = "marp-documents"
 ) -> Dict[str, Any]:
-    """
-    Create a ChunksIndexed event.
-    
-    Published by: Indexing Service
-    Consumed by: (Optional) Monitoring/Analytics services
-    
-    Args:
-        document_id: Document identifier
-        correlation_id: Correlation ID from previous events
-        chunk_count: Number of chunks created and indexed
-        embedding_model: Model used for embeddings (e.g., "all-MiniLM-L6-v2")
-        vector_dim: Dimensionality of vectors (e.g., 384, 768)
-        index_name: Name of the vector database index
-    
-    Returns:
-        ChunksIndexed event dictionary
-    """
     return {
         "eventType": "ChunksIndexed",
         "eventId": generate_event_id(),
@@ -175,21 +114,6 @@ def create_extraction_failed_event(
     error_message: str,
     error_type: str = "ExtractionError"
 ) -> Dict[str, Any]:
-    """
-    Create an ExtractionFailed event (for error handling).
-    
-    Published by: Extraction Service (when extraction fails)
-    Consumed by: Monitoring/Alerting services
-    
-    Args:
-        document_id: Document identifier
-        correlation_id: Correlation ID from DocumentDiscovered
-        error_message: Description of the error
-        error_type: Type of error (ExtractionError, FileNotFound, etc.)
-    
-    Returns:
-        ExtractionFailed event dictionary
-    """
     return {
         "eventType": "ExtractionFailed",
         "eventId": generate_event_id(),
@@ -212,21 +136,6 @@ def create_ingestion_failed_event(
     error_message: str,
     error_type: str = "IngestionError"
 ) -> Dict[str, Any]:
-    """
-    Create an IngestionFailed event (for error handling).
-
-    Published by: Ingestion Service (when ingestion fails)
-    Consumed by: Monitoring/Alerting services
-
-    Args:
-        document_id: Document identifier
-        correlation_id: Correlation ID from DocumentDiscovered
-        error_message: Description of the error
-        error_type: Type of error (IngestionError, FetchError, etc.)
-
-    Returns:
-        IngestionFailed event dictionary
-    """
     return {
         "eventType": "IngestionFailed",
         "eventId": generate_event_id(),
@@ -249,21 +158,6 @@ def create_indexing_failed_event(
     error_message: str,
     error_type: str = "IndexingError"
 ) -> Dict[str, Any]:
-    """
-    Create an IndexingFailed event (for error handling).
-
-    Published by: Indexing Service (when indexing fails)
-    Consumed by: Monitoring/Alerting services
-
-    Args:
-        document_id: Document identifier
-        correlation_id: Correlation ID from previous events
-        error_message: Description of the error
-        error_type: Type of error (IndexingError, VectorDBError, etc.)
-
-    Returns:
-        IndexingFailed event dictionary
-    """
     return {
         "eventType": "IndexingFailed",
         "eventId": generate_event_id(),
@@ -292,24 +186,6 @@ def create_retrieval_completed_event(
     results_summary: Optional[list] = None,
     correlation_id: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Create a RetrievalCompleted event (for analytics/monitoring).
-
-    Published by: Retrieval Service
-    Consumed by: Monitoring/Analytics services
-
-    Args:
-        query: Original user query string
-        top_k: Requested number of results
-        result_count: Number of results returned
-        latency_ms: End-to-end retrieval latency in milliseconds
-        results_summary: Optional lightweight list of results metadata, e.g.,
-            [{"documentId": str, "chunkIndex": int, "score": float}]
-        correlation_id: Optional correlation ID (generated if not provided)
-
-    Returns:
-        RetrievalCompleted event dictionary
-    """
     return {
         "eventType": "RetrievalCompleted",
         "eventId": generate_event_id(),

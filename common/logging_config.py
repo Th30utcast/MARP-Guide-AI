@@ -1,14 +1,19 @@
 """
-Common Logging Configuration
-
-Provides standardized logging setup for all microservices.
-Ensures consistent log formatting and levels across the system.
-
 Usage:
     from common.logging_config import setup_logging
-
     logger = setup_logging(__name__)
     logger.info("Service started")
+
+    Input:
+        name: Logger name (typically __name__ from calling module)
+        level: Logging level (default: INFO)
+        format_string: Optional custom format string
+    returns:
+        Configured logger instance
+
+    Example:
+        >>> logger = setup_logging(__name__)
+        >>> logger.info("✅ Service initialized")
 """
 
 import logging
@@ -20,21 +25,6 @@ def setup_logging(
     level: int = logging.INFO,
     format_string: Optional[str] = None
 ) -> logging.Logger:
-    """
-    Configure and return a logger with standardized formatting.
-
-    Args:
-        name: Logger name (typically __name__ from calling module)
-        level: Logging level (default: INFO)
-        format_string: Optional custom format string
-
-    Returns:
-        Configured logger instance
-
-    Example:
-        >>> logger = setup_logging(__name__)
-        >>> logger.info("✅ Service initialized")
-    """
     if format_string is None:
         format_string = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 

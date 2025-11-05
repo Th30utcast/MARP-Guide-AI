@@ -7,9 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class RabbitMQEventBroker:
-    """
-    Event broker implementation using RabbitMQ for publishing and consuming events.
-    """
+    # Event broker implementation using RabbitMQ for publishing and consuming events.
     
     def __init__(
         self,
@@ -18,15 +16,6 @@ class RabbitMQEventBroker:
         username: str = "guest",
         password: str = "guest"
     ):
-        """
-        Initialize RabbitMQ connection.
-        
-        Args:
-            host: RabbitMQ host
-            port: RabbitMQ port
-            username: RabbitMQ username
-            password: RabbitMQ password
-        """
         self.host = host
         self.port = port
         self.credentials = pika.PlainCredentials(username, password)
@@ -36,7 +25,7 @@ class RabbitMQEventBroker:
         self._connect()
     
     def _connect(self):
-        """Establish connection to RabbitMQ."""
+        # Establish connection to RabbitMQ.
         try:
             connection_params = pika.ConnectionParameters(
                 host=self.host,
@@ -53,13 +42,8 @@ class RabbitMQEventBroker:
             raise
     
     def declare_queue(self, queue_name: str, durable: bool = True):
-        """
-        Declare a queue.
-        
-        Args:
-            queue_name: Name of the queue
-            durable: Whether the queue should survive broker restarts
-        """
+        # queue_name: Name of the queue
+        # durable: Whether the queue should survive broker restarts
         if not self.channel:
             raise RuntimeError("Not connected to RabbitMQ")
         
@@ -67,14 +51,7 @@ class RabbitMQEventBroker:
         logger.info(f"Declared queue: {queue_name}")
     
     def publish(self, routing_key: str, message: str, exchange: str = "events"):
-        """
-        Publish a message to an exchange.
-        
-        Args:
-            routing_key: Routing key for the message
-            message: Message body (JSON string)
-            exchange: Exchange name
-        """
+        # Publish a message to an exchange.
         if not self.channel:
             raise RuntimeError("Not connected to RabbitMQ")
         
@@ -100,9 +77,6 @@ class RabbitMQEventBroker:
         auto_ack: bool = False
     ):
         """
-        Consume messages from a queue.
-
-        Args:
             queue_name: Queue to consume from
             callback: Callback function (ch, method, properties, body) -> None
             auto_ack: Whether to auto-acknowledge messages
