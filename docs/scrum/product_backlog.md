@@ -7,8 +7,8 @@
 
 ## Backlog Management
 
-- **Live Issues:** ----------
-- **Project Board:** ---------
+- **Live Issues:** https://github.com/Th30utcast/MARP-Guide-AI/issues
+- **Project Board:** https://github.com/users/Th30utcast/projects/3
 - **Columns:** Backlog → To Do → In Progress → In Review → Done
 
 ---
