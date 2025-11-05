@@ -17,7 +17,6 @@ Health Check:
     - Used by Docker health checks
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -26,7 +25,8 @@ current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent.parent
 sys.path.insert(0, str(project_root))
 
-from common.mq import RabbitMQEventBroker
+from common.config import get_rabbitmq_broker, MARP_URL, PDF_OUTPUT_DIR, STORAGE_PATH
+from common.events import ROUTING_KEY_DISCOVERED, ROUTING_KEY_INGESTION_FAILED
 from common.health import start_health_server
 from common.logging_config import setup_logging
 from ingestion_service import IngestionService
@@ -37,26 +37,9 @@ logger = setup_logging(__name__)
 if __name__ == "__main__":
     logger.info("🚀 Initializing Ingestion Service Worker...")
 
-    # Environment variables
-    MARP_URL = os.getenv(
-        "MARP_URL",
-        "https://www.lancaster.ac.uk/academic-standards-and-quality/regulations-and-policies/manual-of-academic-regulations-and-procedures/"
-    )
-    RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
-    RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))
-    RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
-    RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
-    PDF_OUTPUT_DIR = os.getenv("PDF_OUTPUT_DIR", "/app/pdfs")
-    STORAGE_PATH = os.getenv("STORAGE_PATH", "/app/storage/extracted")
-
     # Initialize event broker
     try:
-        broker = RabbitMQEventBroker(
-            host=RABBITMQ_HOST,
-            port=RABBITMQ_PORT,
-            username=RABBITMQ_USER,
-            password=RABBITMQ_PASSWORD
-        )
+        broker = get_rabbitmq_broker()
         logger.info("✅ Connected to RabbitMQ")
     except Exception as e:
         logger.error(f"❌ Failed to connect to RabbitMQ: {e}")
@@ -65,8 +48,8 @@ if __name__ == "__main__":
 
     # Declare queues and exchange
     try:
-        broker.declare_queue("documents.discovered")
-        broker.declare_queue("documents.ingestion.failed")
+        broker.declare_queue(ROUTING_KEY_DISCOVERED)
+        broker.declare_queue(ROUTING_KEY_INGESTION_FAILED)
 
         if broker.channel:
             broker.channel.exchange_declare(
@@ -76,13 +59,13 @@ if __name__ == "__main__":
             )
             broker.channel.queue_bind(
                 exchange="events",
-                queue="documents.discovered",
-                routing_key="documents.discovered"
+                queue=ROUTING_KEY_DISCOVERED,
+                routing_key=ROUTING_KEY_DISCOVERED
             )
             broker.channel.queue_bind(
                 exchange="events",
-                queue="documents.ingestion.failed",
-                routing_key="documents.ingestion.failed"
+                queue=ROUTING_KEY_INGESTION_FAILED,
+                routing_key=ROUTING_KEY_INGESTION_FAILED
             )
         logger.info("✅ Queues and exchange configured")
     except Exception as e:

@@ -1,7 +1,7 @@
-import os
 import json
 import logging
-from common.mq import RabbitMQEventBroker
+from common.config import get_rabbitmq_broker
+from common.events import ROUTING_KEY_RETRIEVAL_COMPLETED
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -18,19 +18,14 @@ def on_message(ch, method, properties, body):
 
 
 if __name__ == "__main__":
-    broker = RabbitMQEventBroker(
-        host=os.getenv("RABBITMQ_HOST", "localhost"),
-        port=int(os.getenv("RABBITMQ_PORT", "5672")),
-        username=os.getenv("RABBITMQ_USER", "guest"),
-        password=os.getenv("RABBITMQ_PASSWORD", "guest"),
-    )
+    broker = get_rabbitmq_broker()
 
     # Ensure queue and binding exist
     if broker.channel:
         broker.channel.exchange_declare(exchange="events", exchange_type="topic", durable=True)
-        broker.channel.queue_declare(queue="retrieval.completed", durable=True)
-        broker.channel.queue_bind(exchange="events", queue="retrieval.completed", routing_key="retrieval.completed")
+        broker.channel.queue_declare(queue=ROUTING_KEY_RETRIEVAL_COMPLETED, durable=True)
+        broker.channel.queue_bind(exchange="events", queue=ROUTING_KEY_RETRIEVAL_COMPLETED, routing_key=ROUTING_KEY_RETRIEVAL_COMPLETED)
 
-    logger.info("Listening on queue 'retrieval.completed'...")
-    broker.consume(queue_name="retrieval.completed", callback=on_message, auto_ack=False)
+    logger.info(f"Listening on queue '{ROUTING_KEY_RETRIEVAL_COMPLETED}'...")
+    broker.consume(queue_name=ROUTING_KEY_RETRIEVAL_COMPLETED, callback=on_message, auto_ack=False)
 
