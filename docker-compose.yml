@@ -178,7 +178,7 @@ services:
     container_name: marp-chat
     environment:
       RETRIEVAL_URL: http://retrieval:8002
-      OPENROUTER_API_KEY: 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
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest

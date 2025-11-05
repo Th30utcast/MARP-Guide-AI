@@ -1,16 +1,13 @@
 """
-Ingestion Service - PDF Discovery and Fetching Service
+INGESTION SERVICE
 
-This service discovers PDFs from the MARP website, downloads them,
-and publishes DocumentDiscovered events for downstream processing.
+Core logic for discovering and fetching MARP PDFs. Contains three main classes:
 
-Architecture:
-    - Microservice: Runs as a standalone worker process
-    - Communication: Event-driven via RabbitMQ message broker
-    - Storage: Event-sourced (saves events to disk as source of truth)
+1. MARPScraper - Scrapes the MARP website to find PDF links
+2. PDFFetcher - Downloads PDFs from discovered URLs
+3. IngestionService - Orchestrates the entire ingestion process
 
-Pipeline Position:
-    [Ingestion Service] → DocumentDiscovered → Extraction Service
+Process: Scrape website -> Extract PDF URLs -> Download PDFs -> Save events -> Publish to RabbitMQ
 """
 
 import json
@@ -22,6 +19,7 @@ from typing import Dict, Any, List, Optional
 from urllib.parse import urljoin, urlparse, unquote
 from bs4 import BeautifulSoup
 
+# Import event creation helpers and routing keys for Event-Driven Architecture
 from common.events import (
     create_document_discovered_event,
     create_ingestion_failed_event,
@@ -32,52 +30,51 @@ from common.events import (
 logger = logging.getLogger(__name__)
 
 
+# CLASS 1: Scrapes the MARP website to find all PDF links
 class MARPScraper:
-    """Web scraper for discovering PDF links on the MARP website."""
 
     def __init__(self, base_url: str):
         self.base_url = base_url
         self.session = requests.Session()
+        # Set user agent to avoid being blocked
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         })
 
+    # Main method: discovers all PDFs from the MARP webpage
     def discover_pdfs(self) -> List[Dict[str, str]]:
-        """
-        Scrape the MARP website and discover all PDF links.
-
-        Returns:
-            List of dictionaries containing PDF metadata (title, url, description)
-        """
         try:
             logger.info(f"Scraping MARP website: {self.base_url}")
+            # Step 1: Fetch the webpage
             response = self.session.get(self.base_url, timeout=30)
             response.raise_for_status()
 
+            # Step 2: Parse HTML content
             soup = BeautifulSoup(response.content, 'lxml')
             pdf_links = []
 
-            # Find all links that point to PDFs
+            # Step 3: Find all links that end with .pdf
             for link in soup.find_all('a', href=True):
                 href = link['href']
 
-                # Check if link points to a PDF
                 if href.lower().endswith('.pdf'):
+                    # Convert to absolute URL
                     absolute_url = urljoin(self.base_url, href)
 
-                    # Extract title from link text or nearby elements
+                    # Extract title from link text
                     title = link.get_text(strip=True)
 
-                    # If link text is empty, try to find title in parent elements
+                    # Try parent element if no title
                     if not title:
                         parent = link.parent
                         if parent:
                             title = parent.get_text(strip=True)
 
-                    # Fallback to filename if no title found
+                    # Fallback: use filename as title
                     if not title:
                         title = href.split('/')[-1].replace('.pdf', '').replace('-', ' ').title()
 
+                    # Try to extract description
                     description = ""
                     parent = link.parent
                     if parent:
@@ -85,6 +82,7 @@ class MARPScraper:
                         if desc_elem:
                             description = desc_elem.get_text(strip=True)
 
+                    # Store PDF metadata
                     pdf_info = {
                         'title': title,
                         'url': absolute_url,
@@ -105,8 +103,8 @@ class MARPScraper:
             raise
 
 
+# CLASS 2: Downloads PDFs from discovered URLs
 class PDFFetcher:
-    """Fetcher for downloading PDF files."""
 
     def __init__(self, output_dir: str = "/app/pdfs"):
         self.output_dir = Path(output_dir)
@@ -116,29 +114,20 @@ class PDFFetcher:
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         })
 
+    # Downloads a PDF and calculates checksum for integrity
     def fetch_pdf(self, url: str, document_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Download a PDF from the given URL.
-
-        Args:
-            url: URL to download PDF from
-            document_id: Unique identifier for the document
-
-        Returns:
-            Dictionary with file information or None if failed
-        """
         try:
             logger.info(f"Fetching PDF from: {url}")
 
-            # Download PDF
+            # Download PDF with streaming
             response = self.session.get(url, timeout=60, stream=True)
             response.raise_for_status()
 
-            # Generate filename
+            # Prepare file path
             filename = f"{document_id}.pdf"
             file_path = self.output_dir / filename
 
-            # Save PDF and calculate checksum
+            # Save file and calculate MD5 checksum
             hash_md5 = hashlib.md5()
             file_size = 0
 
@@ -153,6 +142,7 @@ class PDFFetcher:
 
             logger.info(f"PDF downloaded successfully: {file_path} ({file_size} bytes)")
 
+            # Return file metadata
             return {
                 'file_path': str(file_path),
                 'file_size': file_size,
@@ -166,22 +156,15 @@ class PDFFetcher:
             logger.error(f"Unexpected error downloading PDF: {str(e)}")
             return None
 
+    # Check if PDF already exists locally (avoid re-downloading)
     def file_exists(self, document_id: str) -> bool:
-        """Check if PDF already exists locally."""
         filename = f"{document_id}.pdf"
         file_path = self.output_dir / filename
         return file_path.exists()
 
 
+# CLASS 3: Main Ingestion Service - orchestrates scraping, downloading, and event publishing
 class IngestionService:
-    """
-    Ingestion Service that:
-    1. Discovers PDFs from MARP website (via scraper)
-    2. Downloads PDFs (via fetcher)
-    3. Creates DocumentDiscovered events
-    4. Saves events to disk (event sourcing)
-    5. Publishes events to RabbitMQ
-    """
 
     def __init__(
         self,
@@ -190,77 +173,53 @@ class IngestionService:
         pdf_output_dir: str = None,
         storage_path: str = None
     ):
-        """
-        Initialize the Ingestion Service.
-
-        Args:
-            event_broker: RabbitMQEventBroker instance
-            base_url: MARP website URL to scrape
-            pdf_output_dir: Directory to store downloaded PDFs (defaults to env var or /app/pdfs)
-            storage_path: Path to storage directory for events (defaults to env var or /app/storage/extracted)
-        """
         import os
 
+        # RabbitMQ broker for publishing events (EDA)
         self.event_broker = event_broker
 
-        # Use env vars with fallback to absolute paths
+        # Setup directories from environment variables or defaults
         storage_path = storage_path or os.getenv("STORAGE_PATH", "/app/storage/extracted")
         pdf_output_dir = pdf_output_dir or os.getenv("PDF_OUTPUT_DIR", "/app/pdfs")
 
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
-        # Initialize scraper and fetcher
+        # Initialize scraper and fetcher components
         self.scraper = MARPScraper(base_url=base_url)
         self.fetcher = PDFFetcher(output_dir=pdf_output_dir)
 
         logger.info(f"✅ Ingestion service initialized. Storage: {self.storage_path}")
 
+    # Extract document ID from PDF URL (uses filename)
     def _extract_document_id_from_url(self, url: str) -> str:
-        """
-        Extract the document ID from the PDF URL by using its original filename.
-
-        Args:
-            url: PDF URL
-
-        Returns:
-            Document ID (filename without .pdf extension)
-        """
-        # Parse the URL and get the path
         parsed_url = urlparse(url)
-        path = unquote(parsed_url.path)  # Decode any URL-encoded characters
+        path = unquote(parsed_url.path)
 
-        # Extract the filename (last part of the path)
+        # Get filename from URL path
         filename = path.split('/')[-1]
 
-        # Remove the .pdf extension
+        # Remove .pdf extension
         if filename.lower().endswith('.pdf'):
             document_id = filename[:-4]
         else:
             document_id = filename
 
-        # Fallback if somehow we got an empty filename
+        # Fallback: generate random ID if needed
         if not document_id:
             import uuid
             document_id = f"document-{uuid.uuid4().hex[:8]}"
 
         return document_id
 
+    # Event Sourcing: Save DocumentDiscovered event to disk (discovered.json)
     def _save_discovered_event(self, document_id: str, event: Dict[str, Any]):
-        """
-        Save the DocumentDiscovered event to discovered.json (event sourcing pattern).
-        Saves the exact same event that will be published to RabbitMQ.
-
-        Args:
-            document_id: Document identifier
-            event: The complete event dictionary to save
-        """
         try:
-            # Create document directory in storage
+            # Create directory for this document
             doc_dir = self.storage_path / document_id
             doc_dir.mkdir(parents=True, exist_ok=True)
 
-            # Save discovered.json (event-sourced)
+            # Save event as JSON file (event sourcing pattern)
             discovered_path = doc_dir / "discovered.json"
             with open(discovered_path, 'w', encoding='utf-8') as f:
                 json.dump(event, f, indent=2, ensure_ascii=False)
@@ -271,6 +230,7 @@ class IngestionService:
             logger.error(f"Failed to save discovered event for {document_id}: {str(e)}")
             raise
 
+    # EDA: Publish failure event to RabbitMQ for error monitoring
     def _publish_ingestion_failed_event(
         self,
         document_id: str,
@@ -278,18 +238,6 @@ class IngestionService:
         error_message: str,
         error_type: str = "IngestionError"
     ) -> bool:
-        """
-        Publish an IngestionFailed event to the message broker for monitoring.
-
-        Args:
-            document_id: Document identifier
-            correlation_id: Correlation ID from the ingestion process
-            error_message: Description of the error
-            error_type: Type of error (IngestionError, FetchError, ScrapingError, etc.)
-
-        Returns:
-            True if the event was published successfully
-        """
         if not self.event_broker:
             logger.warning("⚠️ Event broker not configured. IngestionFailed event not published.")
             return False
@@ -297,7 +245,7 @@ class IngestionService:
         try:
             logger.info(f"📤 Publishing IngestionFailed event for document {document_id}")
 
-            # Create IngestionFailed event using common helper
+            # Create failure event
             event = create_ingestion_failed_event(
                 document_id=document_id,
                 correlation_id=correlation_id,
@@ -305,7 +253,7 @@ class IngestionService:
                 error_type=error_type
             )
 
-            # Publish to RabbitMQ
+            # Publish to RabbitMQ (Event-Driven Architecture)
             self.event_broker.publish(
                 routing_key=ROUTING_KEY_INGESTION_FAILED,
                 message=json.dumps(event),
@@ -319,25 +267,17 @@ class IngestionService:
             logger.error(f"❌ Error publishing IngestionFailed event: {str(e)}", exc_info=True)
             return False
 
+    # Process a single PDF: download, create event, save, and publish
     def _process_pdf(self, pdf_info: Dict[str, str]) -> Optional[Dict[str, Any]]:
-        """
-        Process a single PDF: fetch, create event, save, and publish.
-
-        Args:
-            pdf_info: Dictionary with 'url' and 'title' keys
-
-        Returns:
-            Processing result dictionary or None if failed
-        """
         document_id = None
         correlation_id = None
 
         try:
-            # Extract document ID from the PDF filename
+            # Step 1: Extract document ID from URL
             document_id = self._extract_document_id_from_url(pdf_info['url'])
             correlation_id = hashlib.md5(document_id.encode()).hexdigest()
 
-            # Check if already fetched
+            # Step 2: Skip if already downloaded
             if self.fetcher.file_exists(document_id):
                 logger.info(f"⏭️ PDF already exists: {pdf_info['title']}")
                 return {
@@ -346,13 +286,13 @@ class IngestionService:
                     "title": pdf_info['title']
                 }
 
-            # Fetch PDF
+            # Step 3: Download PDF
             logger.info(f"📥 Fetching: {pdf_info['title']}")
             fetch_result = self.fetcher.fetch_pdf(pdf_info['url'], document_id)
 
+            # Step 4: Handle download failure
             if not fetch_result:
                 logger.error(f"❌ Failed to fetch: {pdf_info['title']}")
-                # Publish failure event
                 self._publish_ingestion_failed_event(
                     document_id=document_id,
                     correlation_id=correlation_id,
@@ -361,19 +301,19 @@ class IngestionService:
                 )
                 return None
 
-            # Create DocumentDiscovered event using helper function
+            # Step 5: Create DocumentDiscovered event (EDA)
             event = create_document_discovered_event(
                 document_id=document_id,
                 title=pdf_info['title'],
-                url=fetch_result['file_path'],  # Local file path for Extraction
+                url=fetch_result['file_path'],
                 file_size=fetch_result['file_size'],
-                original_url=pdf_info['url']  # Original web URL for reference
+                original_url=pdf_info['url']
             )
 
-            # Save DocumentDiscovered event to discovered.json (event-sourced)
+            # Step 6: Save event to disk (Event Sourcing)
             self._save_discovered_event(document_id, event)
 
-            # Publish event to RabbitMQ
+            # Step 7: Publish event to RabbitMQ (triggers Extraction Service)
             self.event_broker.publish(
                 routing_key=ROUTING_KEY_DISCOVERED,
                 message=json.dumps(event),
@@ -392,7 +332,7 @@ class IngestionService:
         except Exception as e:
             logger.error(f"❌ Error processing {pdf_info['title']}: {str(e)}")
 
-            # Publish failure event if we have document_id
+            # Publish failure event for monitoring
             if document_id and correlation_id:
                 self._publish_ingestion_failed_event(
                     document_id=document_id,
@@ -403,23 +343,16 @@ class IngestionService:
 
             return None
 
+    # MAIN METHOD: Runs the complete ingestion pipeline
     def run_ingestion(self) -> Dict[str, Any]:
-        """
-        Run the complete ingestion process:
-        1. Discover PDFs from MARP website
-        2. Fetch each PDF
-        3. Publish DocumentDiscovered events
-
-        Returns:
-            Dictionary with ingestion statistics
-        """
         try:
             logger.info("🚀 Starting ingestion process...")
 
-            # Step 1: Discover PDFs
+            # STEP 1: Discover all PDFs from MARP website
             logger.info("📡 Discovering PDFs from MARP website...")
             discovered_pdfs = self.scraper.discover_pdfs()
 
+            # Handle case where no PDFs found
             if not discovered_pdfs:
                 logger.warning("⚠️ No PDFs discovered")
                 return {
@@ -433,17 +366,18 @@ class IngestionService:
 
             logger.info(f"✅ Discovered {len(discovered_pdfs)} PDFs")
 
-            # Step 2 & 3: Fetch PDFs and publish events
-            # Resilience: Continue processing all PDFs even if some fail
-            # Failed items are logged and tracked via failure events
+            # STEP 2: Process each discovered PDF
+            # Counters for statistics
             fetched_count = 0
             published_count = 0
             skipped_count = 0
             failed_count = 0
 
+            # Process each PDF (resilient: continues even if some fail)
             for pdf_info in discovered_pdfs:
                 result = self._process_pdf(pdf_info)
 
+                # Update counters based on result
                 if result:
                     if result["status"] == "published":
                         fetched_count += 1
@@ -451,7 +385,6 @@ class IngestionService:
                     elif result["status"] == "skipped":
                         skipped_count += 1
                 else:
-                    # Failed to process (failure event already published)
                     failed_count += 1
                     logger.warning(f"⚠️ Failed to process: {pdf_info.get('title', 'Unknown')}")
 
@@ -460,6 +393,7 @@ class IngestionService:
                 f"{published_count} events published, {skipped_count} skipped, {failed_count} failed"
             )
 
+            # Return summary statistics
             return {
                 "status": "completed",
                 "message": "Ingestion process completed successfully",
@@ -474,8 +408,8 @@ class IngestionService:
             logger.error(f"Error during ingestion: {str(e)}")
             raise
 
+    # Cleanup method: closes connections
     def close(self):
-        """Clean up resources."""
         logger.info("Closing Ingestion Service")
         if self.event_broker:
             self.event_broker.close()

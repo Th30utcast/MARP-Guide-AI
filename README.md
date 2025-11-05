@@ -127,6 +127,28 @@ For detailed architecture diagrams, see:
 
 - Docker and Docker Compose installed
 - At least 4GB of RAM available for containers
+- OpenRouter API key (free tier available)
+
+### Setup
+
+1. **Get an OpenRouter API Key**:
+   - Visit [openrouter.ai](https://openrouter.ai)
+   - Sign up for a free account
+   - Get your API key from the dashboard
+
+2. **Configure environment variables**:
+   ```bash
+   # Open the API_KEY file
+   cp .env.API_Key .env
+
+   # Edit .env and add your OpenRouter API key
+   # Replace 'your_openrouter_api_key_here' with your actual key
+   ```
+
+   Your `.env` file should look like:
+   ```bash
+   OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxx
+   ```
 
 ### Running the System
 

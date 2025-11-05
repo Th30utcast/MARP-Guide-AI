@@ -1,7 +1,11 @@
 """
-OpenRouter Client Module
-Handles LLM API calls for answer generation 
+OPENROUTER CLIENT
+
+Wrapper for calling LLM models via OpenRouter API. Uses the OpenAI SDK.
+
+Send prompts to AI models and get back generated answers for RAG.
 """
+
 import logging
 import httpx
 from openai import OpenAI
@@ -10,11 +14,8 @@ import config
 
 logger = logging.getLogger(__name__)
 
+
 class OpenRouterClient:
-    """
-    Client for OpenRouter API using OpenAI SDK
-    Handles LLM calls for answer generation
-    """
 
     def __init__(
         self,
@@ -23,69 +24,55 @@ class OpenRouterClient:
         temperature: float = None,
         max_tokens: int = None
     ):
-        """
-        Initialize OpenRouter client
-
-        Args:
-            api_key: OpenRouter API key (defaults to config)
-            model: Model to use (defaults to config)
-            temperature: Sampling temperature (defaults to config)
-            max_tokens: Maximum tokens in response (defaults to config)
-        """
+        # Load configuration from config.py or use provided values
         self.api_key = api_key or config.OPENROUTER_API_KEY
         self.model = model or config.OPENROUTER_MODEL
         self.temperature = temperature if temperature is not None else config.TEMPERATURE
         self.max_tokens = max_tokens or config.MAX_TOKENS
 
+        # Validate API key exists
         if not self.api_key:
             raise ValueError("OpenRouter API key not configured. Set OPENROUTER_API_KEY environment variable.")
 
-        # Initialize OpenAI client with OpenRouter base URL
-        # Store headers for OpenRouter free models (sent with each request)
+        # Headers required for OpenRouter free models
         self.headers = {
             "HTTP-Referer": "https://github.com/Th30utcast/MARP-Guide-AI",
             "X-Title": "MARP Guide AI"
         }
-        
-        # Create httpx client with default headers
+
+        # Create HTTP client with headers and timeout
         http_client = httpx.Client(
             headers=self.headers,
             timeout=60.0
         )
-        
+
+        # Initialize OpenAI SDK pointing to OpenRouter's URL
         self.client = OpenAI(
-            base_url=config.OPENROUTER_BASE_URL,
+            base_url=config.OPENROUTER_BASE_URL,  # "https://openrouter.ai/api/v1"
             api_key=self.api_key,
             http_client=http_client
         )
 
         logger.info(f"✅ OpenRouter client initialized | Model: {self.model}")
 
-    def generate_answer(self, prompt: str) -> str:
-        """
-        Generate answer using OpenRouter API
 
-        Args:
-            prompt: The complete RAG prompt (system + context + query)
-
-        Returns:
-            Generated answer as string
-
-        Raises:
-            Exception: If API call fails
-        """
+    def generate_answer(self, prompt: str) -> str:    
+  # Send prompt to LLM and get generated answer back
+       
         try:
             logger.info(f"🤖 Calling OpenRouter API | Model: {self.model}")
 
+            # Call LLM via OpenAI SDK (routes to OpenRouter)
             response = self.client.chat.completions.create(
-                model=self.model,
+                model=self.model,              
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
-                temperature=self.temperature,
-                max_tokens=self.max_tokens
+                temperature=self.temperature,  # Controls randomness (0.0-1.0)
+                max_tokens=self.max_tokens     
             )
 
+            # Extract answer text from response
             answer = response.choices[0].message.content.strip()
             logger.info(f"✅ Generated answer | Length: {len(answer)} chars")
 
