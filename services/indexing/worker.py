@@ -60,9 +60,6 @@ def process_document_extracted(ch, method, properties, body):
     - Processing continues with next document even if current one fails
     - This prevents a single problematic document from blocking the entire pipeline
     """
-    # Tell Python we're using the global variable (created in main below)
-    global indexing_service
-
     try:
         # Step 1: Decode the message from JSON string to Python dictionary
         event = json.loads(body)
