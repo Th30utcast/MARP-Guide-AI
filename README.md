@@ -1,5 +1,7 @@
 # MARP-Guide-AI
 
+![CI Pipeline](https://github.com/Th30utcast/MARP-Guide-AI/actions/workflows/ci.yml/badge.svg)
+
 A Retrieval-Augmented Generation (RAG) chatbot that answers questions about Lancaster University's Manual of Academic Regulations and Procedures (MARP).
 
 ## Product Overview

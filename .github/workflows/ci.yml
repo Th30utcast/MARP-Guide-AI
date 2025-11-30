@@ -103,7 +103,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r services/retrieval/requirements.txt
-          pip install pytest pytest-cov pytest-mock httpx
+          pip install pytest pytest-cov pytest-mock httpx fastapi
 
       - name: Run retrieval tests
         run: |
