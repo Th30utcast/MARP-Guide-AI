@@ -188,9 +188,9 @@ class TestRetrievalAPI:
         mock_model.encode.return_value = Mock()
         mock_model.encode.return_value.tolist.return_value = [0.1] * 384
 
-        # Mock result with very long text
+        # Mock result with very long text (longer than 1700 chars)
         mock_hit = Mock()
-        long_text = "A" * 1000  # 1000 characters
+        long_text = "A" * 2000  # 2000 characters (exceeds 1700 limit)
         mock_hit.payload = {
             "text": long_text,
             "document_id": "doc1",
@@ -214,8 +214,8 @@ class TestRetrievalAPI:
         assert response.status_code == 200
         data = response.json()
 
-        # Text should be truncated to 800 chars + "…"
-        assert len(data["results"][0]["text"]) <= 801
+        # Text should be truncated to 1700 chars + "…" = 1701 total
+        assert len(data["results"][0]["text"]) == 1701
         assert data["results"][0]["text"].endswith("…")
 
     @patch('retrieval_service.qdrant')
