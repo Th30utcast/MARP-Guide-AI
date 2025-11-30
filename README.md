@@ -444,6 +444,39 @@ MARP-Guide-AI/
 └── docker-compose.yml     # Service orchestration
 ```
 
+## Testing
+
+### Running Tests Locally
+
+```bash
+# Install test dependencies
+pip install -r requirements-test.txt
+
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=common --cov=services --cov-report=html
+
+# Run specific test file
+pytest tests/test_common.py -v
+```
+
+See [tests/README.md](tests/README.md) for detailed testing documentation.
+
+### Continuous Integration
+
+The project uses **GitHub Actions** for automated testing. The CI pipeline runs on every push and pull request:
+
+- **Linting**: Checks Python code for syntax errors
+- **Unit Tests**: Tests all services independently
+- **Integration Tests**: Tests service communication
+- **Docker Builds**: Ensures all images build correctly
+
+View the CI configuration: [.github/workflows/ci.yml](.github/workflows/ci.yml)
+
+**CI Status**: Tests run automatically on all branches and PRs. Check the "Actions" tab on GitHub to see results.
+
 ## Troubleshooting
 
 ### Docker won't start
@@ -639,4 +672,9 @@ docker compose logs ingestion
 - **Python**: 3.9+
 - **Git**: Version control
 - **GitHub**: Repository hosting and collaboration
+<<<<<<< Updated upstream
 - **Shell Scripts**: Cross-platform CLI tools (chat.sh, chat.bat, chat.ps1)
+=======
+- **pytest**: Testing framework with coverage reporting
+- **GitHub Actions**: CI/CD pipeline for automated testing
+>>>>>>> Stashed changes
