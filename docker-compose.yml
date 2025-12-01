@@ -200,6 +200,23 @@ services:
       retries: 3
       start_period: 30s
 
+  # ============================================================================
+  # UI Service - React web interface for chat
+  # ============================================================================
+  ui:
+    build:
+      context: .
+      dockerfile: services/ui/Dockerfile
+    container_name: marp-ui
+    depends_on:
+      chat:
+        condition: service_started
+    ports:
+      - "8080:80"   # Expose UI on port 8080
+    networks:
+      - marp-network
+    restart: unless-stopped
+
 # ============================================================================
 # Shared Resources
 # ============================================================================
