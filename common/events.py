@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 
 def generate_event_id() -> str:
@@ -19,14 +19,14 @@ def create_document_discovered_event(
     url: str,
     file_size: int,
     correlation_id: Optional[str] = None,
-    original_url: Optional[str] = None
+    original_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     payload = {
         "documentId": document_id,
         "title": title,
         "url": url,
         "discoveredAt": get_utc_timestamp(),
-        "fileSize": file_size
+        "fileSize": file_size,
     }
 
     # Add originalUrl if provided
@@ -40,7 +40,7 @@ def create_document_discovered_event(
         "correlationId": correlation_id or generate_event_id(),
         "source": "ingestion-service",
         "version": "1.0",
-        "payload": payload
+        "payload": payload,
     }
 
 
@@ -52,7 +52,7 @@ def create_document_extracted_event(
     pdf_metadata: Dict[str, Any],
     extraction_method: str = "pdfplumber",
     url: Optional[str] = None,
-    pages_ref: Optional[str] = None
+    pages_ref: Optional[str] = None,
 ) -> Dict[str, Any]:
     payload = {
         "documentId": document_id,
@@ -60,7 +60,7 @@ def create_document_extracted_event(
         "pageCount": page_count,
         "metadata": pdf_metadata,  # PDF's internal metadata
         "extractedAt": get_utc_timestamp(),
-        "extractionMethod": extraction_method
+        "extractionMethod": extraction_method,
     }
 
     # Add URL if provided
@@ -78,7 +78,7 @@ def create_document_extracted_event(
         "correlationId": correlation_id,
         "source": "extraction-service",
         "version": "1.0",
-        "payload": payload
+        "payload": payload,
     }
 
 
@@ -88,7 +88,7 @@ def create_chunks_indexed_event(
     chunk_count: int,
     embedding_model: str,
     vector_dim: int,
-    index_name: Optional[str] = "marp-documents"
+    index_name: Optional[str] = "marp-documents",
 ) -> Dict[str, Any]:
     return {
         "eventType": "ChunksIndexed",
@@ -103,16 +103,13 @@ def create_chunks_indexed_event(
             "embeddingModel": embedding_model,
             "vectorDim": vector_dim,
             "indexName": index_name,
-            "indexedAt": get_utc_timestamp()
-        }
+            "indexedAt": get_utc_timestamp(),
+        },
     }
 
 
 def create_extraction_failed_event(
-    document_id: str,
-    correlation_id: str,
-    error_message: str,
-    error_type: str = "ExtractionError"
+    document_id: str, correlation_id: str, error_message: str, error_type: str = "ExtractionError"
 ) -> Dict[str, Any]:
     return {
         "eventType": "ExtractionFailed",
@@ -125,16 +122,13 @@ def create_extraction_failed_event(
             "documentId": document_id,
             "errorType": error_type,
             "errorMessage": error_message,
-            "failedAt": get_utc_timestamp()
-        }
+            "failedAt": get_utc_timestamp(),
+        },
     }
 
 
 def create_ingestion_failed_event(
-    document_id: str,
-    correlation_id: str,
-    error_message: str,
-    error_type: str = "IngestionError"
+    document_id: str, correlation_id: str, error_message: str, error_type: str = "IngestionError"
 ) -> Dict[str, Any]:
     return {
         "eventType": "IngestionFailed",
@@ -147,16 +141,13 @@ def create_ingestion_failed_event(
             "documentId": document_id,
             "errorType": error_type,
             "errorMessage": error_message,
-            "failedAt": get_utc_timestamp()
-        }
+            "failedAt": get_utc_timestamp(),
+        },
     }
 
 
 def create_indexing_failed_event(
-    document_id: str,
-    correlation_id: str,
-    error_message: str,
-    error_type: str = "IndexingError"
+    document_id: str, correlation_id: str, error_message: str, error_type: str = "IndexingError"
 ) -> Dict[str, Any]:
     return {
         "eventType": "IndexingFailed",
@@ -169,8 +160,8 @@ def create_indexing_failed_event(
             "documentId": document_id,
             "errorType": error_type,
             "errorMessage": error_message,
-            "failedAt": get_utc_timestamp()
-        }
+            "failedAt": get_utc_timestamp(),
+        },
     }
 
 
@@ -178,13 +169,14 @@ def create_indexing_failed_event(
 # Retrieval Events
 # ----------------------------------------------------------------------------
 
+
 def create_retrieval_completed_event(
     query: str,
     top_k: int,
     result_count: int,
     latency_ms: float,
     results_summary: Optional[list] = None,
-    correlation_id: Optional[str] = None
+    correlation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     return {
         "eventType": "RetrievalCompleted",
@@ -198,9 +190,10 @@ def create_retrieval_completed_event(
             "topK": top_k,
             "resultCount": result_count,
             "latencyMs": latency_ms,
-            "results": results_summary or []
-        }
+            "results": results_summary or [],
+        },
     }
+
 
 # ============================================================================
 # RabbitMQ Routing Keys (for consistency)

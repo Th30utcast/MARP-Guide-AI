@@ -1,9 +1,12 @@
 """
 Prompt Templates Module
-RAG prompt templates for augmentation 
+RAG prompt templates for augmentation
 """
-from typing import List, Dict
+
+from typing import Dict, List
+
 import config
+
 
 def estimate_tokens(text: str) -> int:
     """
@@ -16,6 +19,7 @@ def estimate_tokens(text: str) -> int:
         Estimated token count
     """
     return len(text) // 4
+
 
 def build_rag_context(chunks: List[Dict], max_tokens: int = None) -> str:
     """
@@ -34,7 +38,9 @@ def build_rag_context(chunks: List[Dict], max_tokens: int = None) -> str:
 
     for idx, chunk in enumerate(chunks, start=1):
         # Format chunk with numbered citation marker
-        chunk_text = f"[{idx}] Source: {chunk.get('title', 'Unknown')} - Page {chunk.get('page', 'N/A')}\n{chunk.get('text', '')}"
+        chunk_text = (
+            f"[{idx}] Source: {chunk.get('title', 'Unknown')} - Page {chunk.get('page', 'N/A')}\n{chunk.get('text', '')}"
+        )
         chunk_tokens = estimate_tokens(chunk_text)
 
         # Check if adding this chunk would exceed limit
@@ -45,6 +51,7 @@ def build_rag_context(chunks: List[Dict], max_tokens: int = None) -> str:
         current_tokens += chunk_tokens
 
     return "\n\n---\n\n".join(context_parts)
+
 
 def create_rag_prompt(query: str, context_chunks: List[Dict]) -> str:
     """

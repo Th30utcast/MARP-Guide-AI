@@ -8,12 +8,13 @@ What this tests:
 - Event handling
 """
 
-import pytest
 import json
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock, mock_open
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, Mock, mock_open, patch
+
+import numpy as np
+import pytest
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -26,9 +27,9 @@ from indexing_service import IndexingService
 class TestChunking:
     """Test document chunking functionality."""
 
-    @patch('indexing_service.QdrantClient')
-    @patch('indexing_service.SentenceTransformer')
-    @patch('indexing_service.RabbitMQEventBroker')
+    @patch("indexing_service.QdrantClient")
+    @patch("indexing_service.SentenceTransformer")
+    @patch("indexing_service.RabbitMQEventBroker")
     def test_chunk_document(self, mock_broker, mock_model, mock_qdrant):
         """Test token-based document chunking."""
         # Mock tokenizer
@@ -54,9 +55,9 @@ class TestChunking:
             assert "metadata" in chunk
             assert chunk["metadata"]["title"] == "Test"
 
-    @patch('indexing_service.QdrantClient')
-    @patch('indexing_service.SentenceTransformer')
-    @patch('indexing_service.RabbitMQEventBroker')
+    @patch("indexing_service.QdrantClient")
+    @patch("indexing_service.SentenceTransformer")
+    @patch("indexing_service.RabbitMQEventBroker")
     def test_chunk_document_overlap(self, mock_broker, mock_model, mock_qdrant):
         """Test that chunks have proper overlap."""
         mock_tokenizer = Mock()
@@ -82,9 +83,9 @@ class TestChunking:
 class TestEmbeddings:
     """Test embedding generation."""
 
-    @patch('indexing_service.QdrantClient')
-    @patch('indexing_service.SentenceTransformer')
-    @patch('indexing_service.RabbitMQEventBroker')
+    @patch("indexing_service.QdrantClient")
+    @patch("indexing_service.SentenceTransformer")
+    @patch("indexing_service.RabbitMQEventBroker")
     def test_generate_embeddings(self, mock_broker, mock_model, mock_qdrant):
         """Test embedding generation for chunks."""
         # Mock embeddings (384 dimensions)
@@ -101,12 +102,13 @@ class TestEmbeddings:
         # Should call model.encode
         mock_model.return_value.encode.assert_called_once()
 
+
 class TestQdrantStorage:
     """Test Qdrant vector storage."""
 
-    @patch('indexing_service.QdrantClient')
-    @patch('indexing_service.SentenceTransformer')
-    @patch('indexing_service.RabbitMQEventBroker')
+    @patch("indexing_service.QdrantClient")
+    @patch("indexing_service.SentenceTransformer")
+    @patch("indexing_service.RabbitMQEventBroker")
     def test_store_chunks_in_qdrant(self, mock_broker, mock_model, mock_qdrant):
         """Test storing chunks in Qdrant."""
         service = IndexingService()
@@ -114,22 +116,12 @@ class TestQdrantStorage:
         chunks = [
             {
                 "text": "Chunk 1 text",
-                "metadata": {
-                    "title": "Test Doc",
-                    "page": 1,
-                    "url": "https://example.com/test.pdf",
-                    "document_id": "test-doc"
-                }
+                "metadata": {"title": "Test Doc", "page": 1, "url": "https://example.com/test.pdf", "document_id": "test-doc"},
             },
             {
                 "text": "Chunk 2 text",
-                "metadata": {
-                    "title": "Test Doc",
-                    "page": 2,
-                    "url": "https://example.com/test.pdf",
-                    "document_id": "test-doc"
-                }
-            }
+                "metadata": {"title": "Test Doc", "page": 2, "url": "https://example.com/test.pdf", "document_id": "test-doc"},
+            },
         ]
 
         embeddings = np.random.rand(2, 384)
@@ -141,43 +133,47 @@ class TestQdrantStorage:
 
         # Check the points structure
         call_args = service.qdrant.upsert.call_args
-        points = call_args[1]['points']
+        points = call_args[1]["points"]
 
         assert len(points) == 2
-        assert points[0].payload['text'] == "Chunk 1 text"
-        assert points[0].payload['document_id'] == "test-doc"
-        assert points[0].payload['title'] == "Test Doc"
-        assert points[0].payload['page'] == 1
+        assert points[0].payload["text"] == "Chunk 1 text"
+        assert points[0].payload["document_id"] == "test-doc"
+        assert points[0].payload["title"] == "Test Doc"
+        assert points[0].payload["page"] == 1
 
 
 class TestEventHandling:
     """Test event processing."""
 
-    @patch('indexing_service.IndexingService._read_pages')
-    @patch('indexing_service.IndexingService.chunk_document')
-    @patch('indexing_service.IndexingService.generate_embeddings')
-    @patch('indexing_service.IndexingService.store_chunks_in_qdrant')
-    @patch('indexing_service.IndexingService._save_chunks')
-    @patch('indexing_service.IndexingService.publish_chunks_indexed_event')
-    @patch('indexing_service.QdrantClient')
-    @patch('indexing_service.SentenceTransformer')
-    @patch('indexing_service.RabbitMQEventBroker')
+    @patch("indexing_service.IndexingService._read_pages")
+    @patch("indexing_service.IndexingService.chunk_document")
+    @patch("indexing_service.IndexingService.generate_embeddings")
+    @patch("indexing_service.IndexingService.store_chunks_in_qdrant")
+    @patch("indexing_service.IndexingService._save_chunks")
+    @patch("indexing_service.IndexingService.publish_chunks_indexed_event")
+    @patch("indexing_service.QdrantClient")
+    @patch("indexing_service.SentenceTransformer")
+    @patch("indexing_service.RabbitMQEventBroker")
     def test_handle_document_extracted_event(
-        self, mock_broker, mock_model, mock_qdrant,
-        mock_publish, mock_save_chunks, mock_store,
-        mock_embeddings, mock_chunk, mock_read_pages
+        self,
+        mock_broker,
+        mock_model,
+        mock_qdrant,
+        mock_publish,
+        mock_save_chunks,
+        mock_store,
+        mock_embeddings,
+        mock_chunk,
+        mock_read_pages,
     ):
         """Test handling DocumentExtracted event."""
         # Mock pages from storage
-        mock_read_pages.return_value = [
-            {"page": 1, "text": "Page 1 content"},
-            {"page": 2, "text": "Page 2 content"}
-        ]
+        mock_read_pages.return_value = [{"page": 1, "text": "Page 1 content"}, {"page": 2, "text": "Page 2 content"}]
 
         # Mock chunking (2 pages, 3 chunks each)
         mock_chunk.side_effect = [
             [{"text": "Chunk 1", "metadata": {}}] * 3,  # Page 1
-            [{"text": "Chunk 2", "metadata": {}}] * 3   # Page 2
+            [{"text": "Chunk 2", "metadata": {}}] * 3,  # Page 2
         ]
 
         # Mock embeddings
@@ -189,12 +185,9 @@ class TestEventHandling:
             "correlationId": "corr-123",
             "payload": {
                 "documentId": "test-doc",
-                "metadata": {
-                    "title": "Test Document",
-                    "author": "Test Author"
-                },
-                "url": "https://example.com/test.pdf"
-            }
+                "metadata": {"title": "Test Document", "author": "Test Author"},
+                "url": "https://example.com/test.pdf",
+            },
         }
 
         service.handle_document_extracted_event(event)

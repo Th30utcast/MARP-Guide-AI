@@ -6,7 +6,7 @@
 # Base image: official Python 3.11 slim variant (smaller, minimal dependencies)
 FROM python:3.11-slim
 
-# Sets environment variables 
+# Sets environment variables
 # prevents Python from writing bytecode and buffering
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

@@ -8,15 +8,15 @@ Purpose: Fetches context (relevant text snippets) to include in the LLM prompt.
 """
 
 import logging
-import httpx
-from typing import List, Dict
+from typing import Dict, List
+
 import config
+import httpx
 
 logger = logging.getLogger(__name__)
 
 
 class RetrievalClient:
-
     def __init__(self, retrieval_url: str = None):
         # Load Retrieval Service URL from config or use provided value
         self.retrieval_url = retrieval_url or config.RETRIEVAL_URL
@@ -30,11 +30,7 @@ class RetrievalClient:
             logger.info(f"🔍 Calling Retrieval Service | Query: {query[:50]}... | top_k: {top_k}")
 
             # Send POST request to Retrieval Service
-            response = httpx.post(
-                self.search_endpoint,
-                json={"query": query, "top_k": top_k},
-                timeout=30.0
-            )
+            response = httpx.post(self.search_endpoint, json={"query": query, "top_k": top_k}, timeout=30.0)
             response.raise_for_status()  # Raise error if HTTP request failed
 
             # Extract results from response

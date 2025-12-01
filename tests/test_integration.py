@@ -5,10 +5,11 @@ These tests verify that services can communicate with each other correctly.
 Requires RabbitMQ and Qdrant to be running.
 """
 
+import json
+import time
+
 import pytest
 import requests
-import time
-import json
 
 
 class TestInfrastructure:
@@ -17,11 +18,7 @@ class TestInfrastructure:
     def test_rabbitmq_is_accessible(self):
         """Test that RabbitMQ management API is accessible."""
         try:
-            response = requests.get(
-                "http://localhost:15672/api/overview",
-                auth=('guest', 'guest'),
-                timeout=5
-            )
+            response = requests.get("http://localhost:15672/api/overview", auth=("guest", "guest"), timeout=5)
             assert response.status_code == 200
         except requests.exceptions.RequestException:
             pytest.skip("RabbitMQ not running (expected in CI)")
@@ -54,11 +51,7 @@ class TestEndToEndFlow:
     def test_retrieval_search_endpoint(self):
         """Test retrieval service search endpoint."""
         try:
-            response = requests.post(
-                "http://localhost:8002/search",
-                json={"query": "What is MARP?", "top_k": 3},
-                timeout=10
-            )
+            response = requests.post("http://localhost:8002/search", json={"query": "What is MARP?", "top_k": 3}, timeout=10)
 
             if response.status_code == 200:
                 data = response.json()
@@ -77,22 +70,14 @@ class TestEventFlow:
     def test_rabbitmq_queues_exist(self):
         """Test that required RabbitMQ queues exist."""
         try:
-            response = requests.get(
-                "http://localhost:15672/api/queues",
-                auth=('guest', 'guest'),
-                timeout=5
-            )
+            response = requests.get("http://localhost:15672/api/queues", auth=("guest", "guest"), timeout=5)
 
             if response.status_code == 200:
                 queues = response.json()
-                queue_names = [q['name'] for q in queues]
+                queue_names = [q["name"] for q in queues]
 
                 # Check for expected queues
-                expected_queues = [
-                    'documents.discovered',
-                    'documents.extracted',
-                    'documents.indexed'
-                ]
+                expected_queues = ["documents.discovered", "documents.extracted", "documents.indexed"]
 
                 for queue_name in expected_queues:
                     if queue_name in queue_names:
