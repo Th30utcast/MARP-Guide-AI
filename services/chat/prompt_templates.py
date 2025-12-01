@@ -32,9 +32,9 @@ def build_rag_context(chunks: List[Dict], max_tokens: int = None) -> str:
     context_parts = []
     current_tokens = 0
 
-    for chunk in chunks:
-        # Format chunk with metadata
-        chunk_text = f"[Source: {chunk.get('title', 'Unknown')} - Page {chunk.get('page', 'N/A')}]\n{chunk.get('text', '')}"
+    for idx, chunk in enumerate(chunks, start=1):
+        # Format chunk with numbered citation marker
+        chunk_text = f"[{idx}] Source: {chunk.get('title', 'Unknown')} - Page {chunk.get('page', 'N/A')}\n{chunk.get('text', '')}"
         chunk_tokens = estimate_tokens(chunk_text)
 
         # Check if adding this chunk would exceed limit
@@ -62,10 +62,21 @@ def create_rag_prompt(query: str, context_chunks: List[Dict]) -> str:
 
 IMPORTANT INSTRUCTIONS:
 - Answer questions ONLY based on the provided context
-- If the context doesn't contain enough information to answer the question, say so
-- Include specific references to sources in your answer (mention document titles and page numbers)
-- Be concise and clear
-- Use academic language appropriate for university regulations"""
+- If the context doesn't contain enough information to answer the question, say so clearly WITHOUT including any citation numbers
+- CRITICAL: When stating a fact, immediately follow it with an inline citation number in square brackets [1], [2], etc., matching the numbered sources in the context
+- IMPORTANT: Try to provide comprehensive answers that draw from MULTIPLE sources when relevant - aim for at least 3 different sources when possible
+- If multiple sources contain related information, include details from each and cite them separately
+- ONLY cite sources you actually use - do not mention sources you don't reference
+- Each sentence or claim should have a citation to the specific source it came from
+- Be concise but thorough
+- Use academic language appropriate for university regulations
+
+EXAMPLE FORMAT FOR ANSWERS WITH INFORMATION:
+"Students must inform their department within 48 hours of an exam [1]. Medical certificates are required for illnesses over 5 days [2]. The Exceptional Circumstances Committee will review all claims [3]. For chronic conditions, medical practitioners must comment on assessment impact [4]."
+
+EXAMPLE FORMAT FOR INSUFFICIENT INFORMATION:
+"The provided context does not contain information about [topic]. Please try rephrasing your question or ask about MARP regulations."
+"""
 
     # Build context from chunks with token management
     context_text = build_rag_context(context_chunks)

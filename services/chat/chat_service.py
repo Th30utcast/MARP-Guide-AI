@@ -34,10 +34,10 @@ class Citation(BaseModel):
     page: int
     url: str
 
-#Defines the request model: required query string and optional top_k (1-20, default 5).
+#Defines the request model: required query string and optional top_k (1-20, default 8).
 class ChatRequest(BaseModel):
     query: str = Field(..., description="User's question about MARP")
-    top_k: int = Field(5, ge=1, le=20, description="Number of chunks to retrieve")
+    top_k: int = Field(8, ge=1, le=20, description="Number of chunks to retrieve")
 
 #Defines the response model: query, answer, and a list of citations.
 class ChatResponse(BaseModel):
@@ -90,21 +90,53 @@ def chat(req: ChatRequest):
         logger.info("🤖 Step 3: Generating answer with LLM")
         answer = openrouter_client.generate_answer(prompt)
         
-        # (Step 4 - Citation extraction): Extracts unique citations from chunks, 
-        # using a set to avoid duplicates, and only includes citations with valid title and page numbers.
+        # (Step 4 - Citation extraction): Extracts only citations that were actually referenced
+        # in the answer by looking for inline citation markers like [1], [2], etc.
         logger.info("📚 Step 4: Extracting citations")
-        citations = []
-        seen_citations = set()
-        
-        for chunk in chunks:
-            citation_key = (chunk.get("title", ""), chunk.get("page", 0))
-            if citation_key not in seen_citations and citation_key[0] and citation_key[1]:
-                citations.append(Citation(
-                    title=chunk.get("title", "Unknown"),
-                    page=chunk.get("page", 0),
-                    url=chunk.get("url", "")
-                ))
-                seen_citations.add(citation_key)
+        import re
+
+        # Check if the answer indicates insufficient information
+        # Only treat as "no info" if the answer is primarily about lack of information
+        # (i.e., the insufficient info phrase appears in the first 100 characters)
+        insufficient_info_phrases = [
+            "does not contain",
+            "doesn't contain",
+            "do not contain",
+            "don't contain",
+            "not enough information",
+            "cannot answer",
+            "can't answer",
+            "unable to answer",
+            "no information"
+        ]
+
+        answer_lower = answer.lower()
+        # Check if insufficient info phrase appears early in the answer (first 150 chars)
+        answer_start = answer_lower[:150]
+        has_insufficient_info = any(phrase in answer_start for phrase in insufficient_info_phrases)
+
+        if has_insufficient_info:
+            logger.info("⚠️ Answer indicates insufficient information - returning no citations")
+            citations = []
+        else:
+            # Find all citation numbers in the answer (e.g., [1], [2], [3])
+            cited_numbers = set(int(match) for match in re.findall(r'\[(\d+)\]', answer))
+            logger.info(f"Found inline citations: {sorted(cited_numbers)}")
+
+            # Only include chunks that were actually cited
+            citations = []
+            seen_citations = set()
+
+            for idx, chunk in enumerate(chunks, start=1):
+                if idx in cited_numbers:
+                    citation_key = (chunk.get("title", ""), chunk.get("page", 0))
+                    if citation_key not in seen_citations and citation_key[0] and citation_key[1]:
+                        citations.append(Citation(
+                            title=chunk.get("title", "Unknown"),
+                            page=chunk.get("page", 0),
+                            url=chunk.get("url", "")
+                        ))
+                        seen_citations.add(citation_key)
         
         # (Latency logging): Calculates and logs how long the request took in milliseconds.
         latency = round((time.time() - start_time) * 1000, 2)
