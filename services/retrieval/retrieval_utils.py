@@ -23,8 +23,8 @@ def generate_query_embedding(model: SentenceTransformer, text: str) -> List[floa
 #Searches Qdrant for the top-k most similar document chunks to the query vector and returns results with scores and metadata.
 def search_similar_chunks(client: QdrantClient, collection: str, vector: List[float], top_k: int) -> List[Any]:
     """Cosine similarity search in Qdrant; returns raw hits with .payload and .score."""
-    return client.search(
+    return client.query_points(
         collection_name=collection,
-        query_vector=vector,
+        query=vector,
         limit=top_k,
-    )
+    ).points
