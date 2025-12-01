@@ -23,7 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python dependencies
 # copies the requirements.txt file from the services/retrieval directory into the container at /app
 COPY services/retrieval/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Use BuildKit cache mount for pip - speeds up rebuilds significantly
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # Copy common utilities
 # copies the common directory from the root of the project into the container at /app/common
