@@ -103,9 +103,11 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r services/retrieval/requirements.txt
-          pip install pytest pytest-cov pytest-mock httpx fastapi
+          pip install pytest pytest-cov pytest-mock httpx
 
       - name: Run retrieval tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services/retrieval
         run: |
           pytest tests/test_retrieval.py -v --cov=services/retrieval --cov-report=term-missing
 

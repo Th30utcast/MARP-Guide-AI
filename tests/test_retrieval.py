@@ -112,7 +112,9 @@ class TestRetrievalAPI:
         }
         mock_hit2.score = 0.87
 
-        mock_qdrant.search.return_value = [mock_hit1, mock_hit2]
+        mock_result = Mock()
+        mock_result.points = [mock_hit1, mock_hit2]
+        mock_qdrant.query_points.return_value = mock_result
 
         from retrieval_service import app
         client = TestClient(app)
@@ -163,7 +165,9 @@ class TestRetrievalAPI:
         }
         mock_hit2.score = 0.90
 
-        mock_qdrant.search.return_value = [mock_hit1, mock_hit2]
+        mock_result = Mock()
+        mock_result.points = [mock_hit1, mock_hit2]
+        mock_qdrant.query_points.return_value = mock_result
 
         from retrieval_service import app
         client = TestClient(app)
@@ -201,7 +205,9 @@ class TestRetrievalAPI:
         }
         mock_hit.score = 0.95
 
-        mock_qdrant.search.return_value = [mock_hit]
+        mock_result = Mock()
+        mock_result.points = [mock_hit]
+        mock_qdrant.query_points.return_value = mock_result
 
         from retrieval_service import app
         client = TestClient(app)
