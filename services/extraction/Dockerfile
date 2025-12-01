@@ -9,7 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies
 COPY services/extraction/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Use BuildKit cache mount for pip - speeds up rebuilds significantly
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # Copy common utilities
 COPY common /app/common

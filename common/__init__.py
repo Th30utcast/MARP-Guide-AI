@@ -7,4 +7,4 @@ Common utilities for MARP Guide AI services.
 
 from .mq import RabbitMQEventBroker
 
-__all__ = ['RabbitMQEventBroker']
+__all__ = ["RabbitMQEventBroker"]

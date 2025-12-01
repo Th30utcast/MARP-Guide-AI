@@ -1,0 +1,24 @@
+# Testing dependencies for MARP-Guide-AI
+
+# Core testing framework
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# HTTP testing
+httpx==0.25.2
+requests==2.31.0
+
+# Async testing (for future FastAPI tests)
+pytest-asyncio==0.21.1
+
+# FastAPI testing
+fastapi==0.104.1
+starlette==0.27.0
+
+# Code quality
+flake8==6.1.0
+black==23.11.0
+
+# For mocking
+responses==0.24.1

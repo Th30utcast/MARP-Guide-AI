@@ -2,6 +2,7 @@
 Configuration module for Chat Service
 Loads environment variables and provides configuration constants
 """
+
 import os
 
 # Retrieval Service Configuration
