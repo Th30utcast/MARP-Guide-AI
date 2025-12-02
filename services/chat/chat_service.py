@@ -128,7 +128,7 @@ def chat(req: ChatRequest):
         if has_insufficient_info:
             logger.info("⚠️ Answer indicates insufficient information - returning no citations")
             # Remove any citation markers from the "no info" response
-            answer = re.sub(r'\[\d+\]', '', answer).strip()
+            answer = re.sub(r"\[\d+\]", "", answer).strip()
             citations = []
         else:
             # Find all citation numbers in the answer (e.g., [1], [2], [3])
@@ -153,11 +153,11 @@ def chat(req: ChatRequest):
                         citation_key = (chunk.get("title", ""), chunk.get("page", 0))
                         if citation_key not in seen_citations and citation_key[0] and citation_key[1]:
                             # Add to citations list
-                            citations.append(Citation(
-                                title=chunk.get("title", "Unknown"),
-                                page=chunk.get("page", 0),
-                                url=chunk.get("url", "")
-                            ))
+                            citations.append(
+                                Citation(
+                                    title=chunk.get("title", "Unknown"), page=chunk.get("page", 0), url=chunk.get("url", "")
+                                )
+                            )
                             seen_citations.add(citation_key)
                             # Map old citation number to new position in deduplicated list
                             citation_mapping[idx] = len(citations)
@@ -176,12 +176,12 @@ def chat(req: ChatRequest):
                     if old_num in citation_mapping:
                         new_num = citation_mapping[old_num]
                         # Replace all occurrences of [old_num] with [new_num]
-                        answer = answer.replace(f'[{old_num}]', f'[{new_num}]')
+                        answer = answer.replace(f"[{old_num}]", f"[{new_num}]")
 
                 logger.info(f"Renumbered citations: {citation_mapping}")
 
                 # After renumbering, only keep citations that actually appear in the final answer
-                final_cited_numbers = set(int(match) for match in re.findall(r'\[(\d+)\]', answer))
+                final_cited_numbers = set(int(match) for match in re.findall(r"\[(\d+)\]", answer))
                 citations = [cit for i, cit in enumerate(citations, start=1) if i in final_cited_numbers]
                 logger.info(f"Citations after dedup filtering: {sorted(final_cited_numbers)}")
 
@@ -194,7 +194,7 @@ def chat(req: ChatRequest):
                     # Replace citation numbers in descending order to avoid conflicts
                     for old_pos in sorted(final_cited_numbers, reverse=True):
                         new_pos = final_mapping[old_pos]
-                        answer = answer.replace(f'[{old_pos}]', f'[{new_pos}]')
+                        answer = answer.replace(f"[{old_pos}]", f"[{new_pos}]")
 
                     logger.info(f"Final renumbering to consecutive: {final_mapping}")
 
