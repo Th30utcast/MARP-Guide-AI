@@ -16,7 +16,7 @@ Total Events: 7
 | IndexingFailed | Indexing Service | (None - Monitoring Service planned) |
 | RetrievalCompleted | Retrieval Service | (None - Monitoring Service planned) |
 
---- 
+---
 
 ## Event Definitions
 
@@ -69,7 +69,7 @@ The Extraction Service subscribes to this event and:
 2. Validates the file integrity
 3. Prepares it for text and metadata extraction
 
---- --- --- --- 
+--- --- --- ---
 
 ### 2. DocumentExtracted
 

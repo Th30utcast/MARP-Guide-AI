@@ -19,7 +19,7 @@ Usage:
 import json
 import logging
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -32,35 +32,27 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         # Handle GET requests to /health endpoint.
-        if self.path == '/health':
+        if self.path == "/health":
             # Check if broker is connected
             is_healthy = (
-                self.broker is not None and
-                self.broker.connection is not None and
-                not self.broker.connection.is_closed and
-                self.broker.channel is not None and
-                self.broker.channel.is_open
+                self.broker is not None
+                and self.broker.connection is not None
+                and not self.broker.connection.is_closed
+                and self.broker.channel is not None
+                and self.broker.channel.is_open
             )
 
             if is_healthy:
                 self.send_response(200)
-                self.send_header('Content-type', 'application/json')
+                self.send_header("Content-type", "application/json")
                 self.end_headers()
-                response = {
-                    "status": "healthy",
-                    "service": self.service_name,
-                    "rabbitmq": "connected"
-                }
+                response = {"status": "healthy", "service": self.service_name, "rabbitmq": "connected"}
                 self.wfile.write(json.dumps(response).encode())
             else:
                 self.send_response(503)
-                self.send_header('Content-type', 'application/json')
+                self.send_header("Content-type", "application/json")
                 self.end_headers()
-                response = {
-                    "status": "unhealthy",
-                    "service": self.service_name,
-                    "rabbitmq": "disconnected"
-                }
+                response = {"status": "unhealthy", "service": self.service_name, "rabbitmq": "disconnected"}
                 self.wfile.write(json.dumps(response).encode())
         else:
             self.send_response(404)
@@ -79,7 +71,7 @@ def start_health_server(broker, service_name: str = "service", port: int = 8080)
     def run_server():
         # Background thread function that runs the HTTP server.
         try:
-            server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
+            server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
             logger.info(f"✅ Health check server started on port {port}")
             server.serve_forever()
         except Exception as e:

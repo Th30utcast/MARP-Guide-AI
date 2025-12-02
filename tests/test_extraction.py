@@ -8,11 +8,12 @@ What this tests:
 - Error handling for corrupted PDFs
 """
 
-import pytest
 import json
-from unittest.mock import Mock, patch, MagicMock, mock_open
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, Mock, mock_open, patch
+
+import pytest
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -25,9 +26,9 @@ from extraction_service import ExtractionService
 class TestExtractionService:
     """Test PDF extraction functionality."""
 
-    @patch('extraction_service.pdfplumber.open')
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('extraction_service.Path.mkdir')
+    @patch("extraction_service.pdfplumber.open")
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("extraction_service.Path.mkdir")
     def test_extract_pdf_content_success(self, mock_mkdir, mock_file, mock_pdfplumber):
         """Test successful PDF content extraction."""
         # Mock PDF with 2 pages
@@ -39,11 +40,7 @@ class TestExtractionService:
 
         mock_pdf = Mock()
         mock_pdf.pages = [mock_page1, mock_page2]
-        mock_pdf.metadata = {
-            "Title": "Test Document",
-            "Author": "Test Author",
-            "CreationDate": "D:20250101120000Z"
-        }
+        mock_pdf.metadata = {"Title": "Test Document", "Author": "Test Author", "CreationDate": "D:20250101120000Z"}
         mock_pdf.__enter__ = Mock(return_value=mock_pdf)
         mock_pdf.__exit__ = Mock(return_value=False)
 
@@ -58,7 +55,7 @@ class TestExtractionService:
         assert result["pages"][0]["text"] == "Page 1 content"
         assert result["metadata"]["title"] == "Test Document"
 
-    @patch('extraction_service.pdfplumber.open')
+    @patch("extraction_service.pdfplumber.open")
     def test_extract_pdf_handles_empty_pages(self, mock_pdfplumber):
         """Test handling of pages with no extractable text."""
         # Mock page with no text
@@ -92,12 +89,11 @@ class TestExtractionService:
         year = service._extract_year({"creation_date": "invalid"})
         assert year > 2020  # Should be current year
 
-    @patch('extraction_service.ExtractionService._extract_pdf_content')
-    @patch('extraction_service.ExtractionService._save_extracted_content')
-    @patch('extraction_service.ExtractionService._save_event')
-    @patch('builtins.open', new_callable=mock_open, read_data='{"payload": {"documentId": "test"}}')
-    def test_extract_document_success(self, mock_file, mock_save_event,
-                                     mock_save_content, mock_extract):
+    @patch("extraction_service.ExtractionService._extract_pdf_content")
+    @patch("extraction_service.ExtractionService._save_extracted_content")
+    @patch("extraction_service.ExtractionService._save_event")
+    @patch("builtins.open", new_callable=mock_open, read_data='{"payload": {"documentId": "test"}}')
+    def test_extract_document_success(self, mock_file, mock_save_event, mock_save_content, mock_extract):
         """Test complete document extraction process."""
         mock_broker = Mock()
 
@@ -107,15 +103,12 @@ class TestExtractionService:
             "page_count": 10,
             "pages": [{"page": 1, "text": "content"}],
             "metadata": {"title": "Test", "author": "Author"},
-            "extraction_method": "pdfplumber"
+            "extraction_method": "pdfplumber",
         }
 
         mock_save_content.return_value = "/tmp/storage/test/pages.jsonl"
 
-        service = ExtractionService(
-            event_broker=mock_broker,
-            storage_path="/tmp/storage"
-        )
+        service = ExtractionService(event_broker=mock_broker, storage_path="/tmp/storage")
 
         event = {
             "correlationId": "corr-123",
@@ -123,8 +116,8 @@ class TestExtractionService:
                 "documentId": "test-doc",
                 "url": "/app/pdfs/test.pdf",
                 "title": "Test Document",
-                "originalUrl": "https://example.com/test.pdf"
-            }
+                "originalUrl": "https://example.com/test.pdf",
+            },
         }
 
         result = service.extract_document(event)
@@ -134,24 +127,17 @@ class TestExtractionService:
         assert result["payload"]["documentId"] == "test-doc"
         assert result["payload"]["pageCount"] == 10
 
-    @patch('extraction_service.ExtractionService._extract_pdf_content')
+    @patch("extraction_service.ExtractionService._extract_pdf_content")
     def test_handle_document_discovered_event_error(self, mock_extract):
         """Test error handling during extraction."""
         mock_broker = Mock()
         mock_extract.side_effect = Exception("PDF corrupted")
 
-        service = ExtractionService(
-            event_broker=mock_broker,
-            storage_path="/tmp/storage"
-        )
+        service = ExtractionService(event_broker=mock_broker, storage_path="/tmp/storage")
 
         event = {
             "correlationId": "corr-123",
-            "payload": {
-                "documentId": "test-doc",
-                "url": "/app/pdfs/test.pdf",
-                "title": "Test Document"
-            }
+            "payload": {"documentId": "test-doc", "url": "/app/pdfs/test.pdf", "title": "Test Document"},
         }
 
         result = service.handle_document_discovered_event(event)

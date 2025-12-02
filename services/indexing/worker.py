@@ -18,16 +18,16 @@ import os
 import sys
 from pathlib import Path
 
-
 # Add the current directory to Python's search path so we can import our code
 current_dir = Path(__file__).resolve().parent
 project_root = current_dir
 sys.path.insert(0, str(project_root))
 
-from common.mq import RabbitMQEventBroker
+from indexing_service import IndexingService
+
 from common.health import start_health_server
 from common.logging_config import setup_logging
-from indexing_service import IndexingService
+from common.mq import RabbitMQEventBroker
 
 # Set up logging so we can see what's happening
 logger = setup_logging(__name__)
@@ -36,6 +36,7 @@ logger = setup_logging(__name__)
 # ============================================================================
 # EVENT PROCESSING - This Function Runs Every Time a Message Arrives
 # ============================================================================
+
 
 def process_document_extracted(ch, method, properties, body):
     """
@@ -121,10 +122,10 @@ if __name__ == "__main__":
     try:
         # Read connection settings from environment variables (set by Docker)
         broker = RabbitMQEventBroker(
-            host=os.getenv("RABBITMQ_HOST", "localhost"),      # Where is RabbitMQ?
-            port=int(os.getenv("RABBITMQ_PORT", 5672)),        # What port?
-            username=os.getenv("RABBITMQ_USER", "guest"),      # Login username
-            password=os.getenv("RABBITMQ_PASSWORD", "guest")   # Login password
+            host=os.getenv("RABBITMQ_HOST", "localhost"),  # Where is RabbitMQ?
+            port=int(os.getenv("RABBITMQ_PORT", 5672)),  # What port?
+            username=os.getenv("RABBITMQ_USER", "guest"),  # Login username
+            password=os.getenv("RABBITMQ_PASSWORD", "guest"),  # Login password
         )
         logger.info("✅ Connected to RabbitMQ")
     except Exception as e:
@@ -150,36 +151,26 @@ if __name__ == "__main__":
         if broker.channel:
             # Create a "topic" exchange
             broker.channel.exchange_declare(
-                exchange="events",           # Name of the exchange
-                exchange_type="topic",       # Type: topic (uses routing keys)
-                durable=True                 # Survives RabbitMQ restarts
+                exchange="events",  # Name of the exchange
+                exchange_type="topic",  # Type: topic (uses routing keys)
+                durable=True,  # Survives RabbitMQ restarts
             )
 
             # Connect "documents.extracted" queue to the exchange
             # When someone sends a message with routing_key="documents.extracted",
             # it will arrive in our inbox
-            broker.channel.queue_bind(
-                exchange="events",
-                queue="documents.extracted",
-                routing_key="documents.extracted"
-            )
+            broker.channel.queue_bind(exchange="events", queue="documents.extracted", routing_key="documents.extracted")
 
             # Connect "documents.indexed" queue to the exchange
             # When we send messages with routing_key="documents.indexed",
             # they'll go to this queue
-            broker.channel.queue_bind(
-                exchange="events",
-                queue="documents.indexed",
-                routing_key="documents.indexed"
-            )
+            broker.channel.queue_bind(exchange="events", queue="documents.indexed", routing_key="documents.indexed")
 
             # Connect "documents.indexing.failed" queue to the exchange
             # When we send messages with routing_key="documents.indexing.failed",
             # they'll go to this queue for monitoring
             broker.channel.queue_bind(
-                exchange="events",
-                queue="documents.indexing.failed",
-                routing_key="documents.indexing.failed"
+                exchange="events", queue="documents.indexing.failed", routing_key="documents.indexing.failed"
             )
         logger.info("✅ Queues and exchange configured")
     except Exception as e:
@@ -221,16 +212,16 @@ if __name__ == "__main__":
         # Start consuming messages from the "documents.extracted" queue
         # Every time a message arrives, RabbitMQ will call process_document_extracted()
         broker.consume(
-            queue_name="documents.extracted",          # Which queue to listen to
-            callback=process_document_extracted,       # What function to call for each message
-            auto_ack=False                            # We'll manually acknowledge
+            queue_name="documents.extracted",  # Which queue to listen to
+            callback=process_document_extracted,  # What function to call for each message
+            auto_ack=False,  # We'll manually acknowledge
         )
 
     except KeyboardInterrupt:
         # User pressed Ctrl+C - shut down gracefully
         logger.info("\n⏹️ Shutting down gracefully...")
         indexing_service.close()  # Close database connections
-        broker.close()            # Close RabbitMQ connection
+        broker.close()  # Close RabbitMQ connection
         logger.info("👋 Goodbye!")
 
     except Exception as e:

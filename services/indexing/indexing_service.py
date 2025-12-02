@@ -19,34 +19,34 @@ TECHNICAL DETAILS:
 - Preserves metadata (title, page number, URL) for citations
 """
 
-import os
 import json
 import logging
+import os
 import time
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
+from qdrant_client.models import Distance, PointStruct, VectorParams
+from sentence_transformers import SentenceTransformer
+
 from common.events import (
+    ROUTING_KEY_INDEXED,
+    ROUTING_KEY_INDEXING_FAILED,
     create_chunks_indexed_event,
     create_indexing_failed_event,
-    ROUTING_KEY_INDEXED,
-    ROUTING_KEY_INDEXING_FAILED
 )
 from common.mq import RabbitMQEventBroker
 
 # Set up logging so we can see what's happening
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 # ============================================================================
 # INDEXING SERVICE CLASS - The Main Service That Does All The Work
 # ============================================================================
+
 
 class IndexingService:
     """
@@ -86,16 +86,13 @@ class IndexingService:
 
         # Connect to RabbitMQ (so we can send messages to other services)
         self.event_broker = RabbitMQEventBroker(
-            host=self.rabbitmq_host,
-            port=self.rabbitmq_port,
-            username=self.rabbitmq_user,
-            password=self.rabbitmq_password
+            host=self.rabbitmq_host, port=self.rabbitmq_port, username=self.rabbitmq_user, password=self.rabbitmq_password
         )
 
         # Load the AI embedding model
         # all-MiniLM-L6-v2 creates 384-dimensional vectors (384 numbers per chunk)
         logger.info("Loading embedding model: all-MiniLM-L6-v2")
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
         logger.info("Embedding model loaded successfully")
 
         # Connect to Qdrant
@@ -150,9 +147,9 @@ class IndexingService:
             self.qdrant.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(
-                    size=self.vector_size,        # Vectors are 384 numbers long
-                    distance=Distance.COSINE       # Use cosine similarity for search
-                )
+                    size=self.vector_size,  # Vectors are 384 numbers long
+                    distance=Distance.COSINE,  # Use cosine similarity for search
+                ),
             )
             logger.info(f"Collection '{self.collection_name}' created successfully")
         except Exception as e:
@@ -215,10 +212,10 @@ class IndexingService:
                 # Create metadata for this page's chunks
                 # This will be attached to every chunk from this page
                 chunk_metadata = {
-                    "title": doc_title,        # Document title
-                    "page": page_num,          # Page number (for citations!)
-                    "url": doc_url,            # URL to the original PDF
-                    "document_id": document_id # Which document this came from
+                    "title": doc_title,  # Document title
+                    "page": page_num,  # Page number (for citations!)
+                    "url": doc_url,  # URL to the original PDF
+                    "document_id": document_id,  # Which document this came from
                 }
 
                 # Break this page into chunks using the chunking function
@@ -255,7 +252,9 @@ class IndexingService:
     # CORE OPERATIONS - Helper Functions Called by the Main Orchestrator
     # ========================================================================
 
-    def chunk_document(self, text: str, metadata: dict, max_tokens: int = 200, overlap_tokens: int = 50) -> List[Dict[str, Any]]:
+    def chunk_document(
+        self, text: str, metadata: dict, max_tokens: int = 200, overlap_tokens: int = 50
+    ) -> List[Dict[str, Any]]:
         """
         Break a document into overlapping chunks using actual token counting.
 
@@ -300,14 +299,11 @@ class IndexingService:
 
             # Only add non-empty chunks
             if chunk_text:
-                chunks.append({
-                    "text": chunk_text,
-                    "metadata": metadata.copy()
-                })
+                chunks.append({"text": chunk_text, "metadata": metadata.copy()})
 
             # Move window forward by (max_tokens - overlap_tokens)
             # This creates the overlap between consecutive chunks
-            start_idx += (max_tokens - overlap_tokens)
+            start_idx += max_tokens - overlap_tokens
 
         logger.info(f"Chunked document into {len(chunks)} overlapping chunks")
         return chunks
@@ -334,7 +330,7 @@ class IndexingService:
 
         # Read the file line by line (each line is one page)
         pages = []
-        with open(pages_file, 'r', encoding='utf-8') as f:
+        with open(pages_file, "r", encoding="utf-8") as f:
             for line in f:
                 # Parse the JSON on this line
                 page_data = json.loads(line.strip())
@@ -362,8 +358,7 @@ class IndexingService:
         logger.info(f"Generated embeddings with shape {embeddings.shape}")
         return embeddings
 
-    def store_chunks_in_qdrant(self, chunks: List[Dict[str, Any]],
-                               embeddings: np.ndarray, document_id: str):
+    def store_chunks_in_qdrant(self, chunks: List[Dict[str, Any]], embeddings: np.ndarray, document_id: str):
         """
         Store the chunks and their vectors in Qdrant database.
 
@@ -392,25 +387,24 @@ class IndexingService:
             point_id = hash(point_id_str) % (2**63)
 
             # Create a point (record) with vector and metadata
-            points.append(PointStruct(
-                id=point_id,                      # Unique numeric ID
-                vector=embedding.tolist(),        # Convert numpy array to list
-                payload={                         # Metadata attached to this vector
-                    "text": chunk["text"],        # Original text (for display)
-                    "document_id": document_id,   # Which document
-                    "chunk_index": idx,           # Which chunk number
-                    "title": chunk["metadata"].get("title", ""),     # Document title
-                    "page": chunk["metadata"].get("page", 0),        # Page number
-                    "url": chunk["metadata"].get("url", "")          # PDF URL
-                }
-            ))
+            points.append(
+                PointStruct(
+                    id=point_id,  # Unique numeric ID
+                    vector=embedding.tolist(),  # Convert numpy array to list
+                    payload={  # Metadata attached to this vector
+                        "text": chunk["text"],  # Original text (for display)
+                        "document_id": document_id,  # Which document
+                        "chunk_index": idx,  # Which chunk number
+                        "title": chunk["metadata"].get("title", ""),  # Document title
+                        "page": chunk["metadata"].get("page", 0),  # Page number
+                        "url": chunk["metadata"].get("url", ""),  # PDF URL
+                    },
+                )
+            )
 
         # Insert (or update if exists) all points into Qdrant
         # "upsert" = update if exists, insert if new
-        self.qdrant.upsert(
-            collection_name=self.collection_name,
-            points=points
-        )
+        self.qdrant.upsert(collection_name=self.collection_name, points=points)
         logger.info(f"Successfully stored {len(points)} points in Qdrant")
 
     def _save_chunks(self, document_id: str, chunks: List[Dict[str, Any]]):
@@ -426,7 +420,7 @@ class IndexingService:
         # Write the chunks as pretty-printed JSON
         # indent=2 makes it readable
         # ensure_ascii=False allows non-English characters
-        with open(chunks_file, 'w', encoding='utf-8') as f:
+        with open(chunks_file, "w", encoding="utf-8") as f:
             json.dump(chunks, f, indent=2, ensure_ascii=False)
 
         logger.info(f"Chunks saved to {chunks_file}")
@@ -435,8 +429,7 @@ class IndexingService:
     # EVENT PUBLISHING - Notifying Other Services
     # ========================================================================
 
-    def publish_chunks_indexed_event(self, document_id: str, correlation_id: str,
-                                     chunk_count: int):
+    def publish_chunks_indexed_event(self, document_id: str, correlation_id: str, chunk_count: int):
         """
         Publish a success event to RabbitMQ saying "indexing is done!"
 
@@ -460,7 +453,7 @@ class IndexingService:
             chunk_count=chunk_count,
             embedding_model="all-MiniLM-L6-v2",
             vector_dim=self.vector_size,
-            index_name=self.collection_name
+            index_name=self.collection_name,
         )
 
         # Save the event to disk (event sourcing - keeps a record of what happened)
@@ -468,10 +461,7 @@ class IndexingService:
 
         # Publish the event to RabbitMQ
         # Other services listening to "documents.indexed" will receive this
-        self.event_broker.publish(
-            routing_key=ROUTING_KEY_INDEXED,
-            message=json.dumps(event)
-        )
+        self.event_broker.publish(routing_key=ROUTING_KEY_INDEXED, message=json.dumps(event))
 
         logger.info(f"ChunksIndexed event published for document {document_id}")
 
@@ -491,17 +481,11 @@ class IndexingService:
 
             # Create the failure event
             event = create_indexing_failed_event(
-                document_id=document_id,
-                correlation_id=correlation_id,
-                error_message=error_message,
-                error_type="IndexingError"
+                document_id=document_id, correlation_id=correlation_id, error_message=error_message, error_type="IndexingError"
             )
 
             # Publish to RabbitMQ
-            self.event_broker.publish(
-                routing_key=ROUTING_KEY_INDEXING_FAILED,
-                message=json.dumps(event)
-            )
+            self.event_broker.publish(routing_key=ROUTING_KEY_INDEXING_FAILED, message=json.dumps(event))
 
             logger.info(f"IndexingFailed event published for document {document_id}")
 
@@ -531,7 +515,7 @@ class IndexingService:
         logger.info(f"Saving event to {event_file}")
 
         # Write the event as JSON
-        with open(event_file, 'w', encoding='utf-8') as f:
+        with open(event_file, "w", encoding="utf-8") as f:
             json.dump(event, f, indent=2, ensure_ascii=False)
 
         logger.info(f"Event saved to {event_file}")

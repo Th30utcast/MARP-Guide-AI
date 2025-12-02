@@ -4,7 +4,9 @@ WORKDIR /app
 
 # Install dependencies
 COPY services/ingestion/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Use BuildKit cache mount for pip - speeds up rebuilds significantly
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 # Copy common utilities (shared RabbitMQ broker and events)
 COPY common /app/common

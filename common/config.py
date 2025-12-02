@@ -4,7 +4,6 @@ from typing import Optional
 
 from .mq import RabbitMQEventBroker
 
-
 # ============================================================================
 # RabbitMQ Configuration
 # ============================================================================
@@ -17,12 +16,7 @@ RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 
 def get_rabbitmq_broker() -> RabbitMQEventBroker:
     # Create and return a configured RabbitMQ event broker instance.
-    return RabbitMQEventBroker(
-        host=RABBITMQ_HOST,
-        port=RABBITMQ_PORT,
-        username=RABBITMQ_USER,
-        password=RABBITMQ_PASSWORD
-    )
+    return RabbitMQEventBroker(host=RABBITMQ_HOST, port=RABBITMQ_PORT, username=RABBITMQ_USER, password=RABBITMQ_PASSWORD)
 
 
 # ============================================================================
@@ -68,4 +62,7 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 # Ingestion Configuration
 # ============================================================================
 
-MARP_URL = os.getenv("MARP_URL", "https://www.gov.uk/government/collections/medicines-and-healthcare-products-regulatory-agency-risk-assessments")
+MARP_URL = os.getenv(
+    "MARP_URL",
+    "https://www.gov.uk/government/collections/medicines-and-healthcare-products-regulatory-agency-risk-assessments",
+)

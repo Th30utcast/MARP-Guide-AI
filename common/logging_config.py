@@ -20,20 +20,13 @@ import logging
 from typing import Optional
 
 
-def setup_logging(
-    name: str,
-    level: int = logging.INFO,
-    format_string: Optional[str] = None
-) -> logging.Logger:
+def setup_logging(name: str, level: int = logging.INFO, format_string: Optional[str] = None) -> logging.Logger:
     if format_string is None:
-        format_string = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format_string = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     # Only configure root logger once
     if not logging.getLogger().handlers:
-        logging.basicConfig(
-            level=level,
-            format=format_string
-        )
+        logging.basicConfig(level=level, format=format_string)
 
     # Return logger for the specific module
     logger = logging.getLogger(name)
