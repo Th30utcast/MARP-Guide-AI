@@ -117,27 +117,77 @@ def chat(req: ChatRequest):
 
         if has_insufficient_info:
             logger.info("⚠️ Answer indicates insufficient information - returning no citations")
+            # Remove any citation markers from the "no info" response
+            answer = re.sub(r'\[\d+\]', '', answer).strip()
             citations = []
         else:
             # Find all citation numbers in the answer (e.g., [1], [2], [3])
             cited_numbers = set(int(match) for match in re.findall(r'\[(\d+)\]', answer))
             logger.info(f"Found inline citations: {sorted(cited_numbers)}")
 
-            # Only include chunks that were actually cited
-            citations = []
-            seen_citations = set()
+            # VALIDATION: If answer has 0 citations, it means LLM is hallucinating
+            # Reject the answer and force "no information" response
+            if len(cited_numbers) == 0:
+                logger.warning("⚠️ LLM answered without citations - rejecting as hallucination")
+                logger.warning(f"Rejected answer: {answer[:200]}...")
+                answer = f"The MARP documents provided do not contain information about this topic. Please try asking about MARP regulations, policies, or procedures."
+                citations = []
+            else:
+                # Only include chunks that were actually cited
+                citations = []
+                seen_citations = set()
+                citation_mapping = {}  # Maps old citation numbers to new numbers
 
-            for idx, chunk in enumerate(chunks, start=1):
-                if idx in cited_numbers:
-                    citation_key = (chunk.get("title", ""), chunk.get("page", 0))
-                    if citation_key not in seen_citations and citation_key[0] and citation_key[1]:
-                        citations.append(Citation(
-                            title=chunk.get("title", "Unknown"),
-                            page=chunk.get("page", 0),
-                            url=chunk.get("url", "")
-                        ))
-                        seen_citations.add(citation_key)
-        
+                for idx, chunk in enumerate(chunks, start=1):
+                    if idx in cited_numbers:
+                        citation_key = (chunk.get("title", ""), chunk.get("page", 0))
+                        if citation_key not in seen_citations and citation_key[0] and citation_key[1]:
+                            # Add to citations list
+                            citations.append(Citation(
+                                title=chunk.get("title", "Unknown"),
+                                page=chunk.get("page", 0),
+                                url=chunk.get("url", "")
+                            ))
+                            seen_citations.add(citation_key)
+                            # Map old citation number to new position in deduplicated list
+                            citation_mapping[idx] = len(citations)
+                        elif citation_key in seen_citations:
+                            # This is a duplicate - map it to the existing citation number
+                            # Find which number this citation_key was mapped to
+                            for old_idx, new_idx in citation_mapping.items():
+                                if (chunks[old_idx - 1].get("title", ""), chunks[old_idx - 1].get("page", 0)) == citation_key:
+                                    citation_mapping[idx] = new_idx
+                                    break
+
+                # Renumber citations in the answer to match deduplicated list
+                # Sort by citation number in descending order to avoid replacement conflicts
+                # (e.g., replacing [1] before [10] would corrupt [10])
+                for old_num in sorted(cited_numbers, reverse=True):
+                    if old_num in citation_mapping:
+                        new_num = citation_mapping[old_num]
+                        # Replace all occurrences of [old_num] with [new_num]
+                        answer = answer.replace(f'[{old_num}]', f'[{new_num}]')
+
+                logger.info(f"Renumbered citations: {citation_mapping}")
+
+                # After renumbering, only keep citations that actually appear in the final answer
+                final_cited_numbers = set(int(match) for match in re.findall(r'\[(\d+)\]', answer))
+                citations = [cit for i, cit in enumerate(citations, start=1) if i in final_cited_numbers]
+                logger.info(f"Citations after dedup filtering: {sorted(final_cited_numbers)}")
+
+                # If citations are not consecutive (e.g., [1, 3]), renumber them to be consecutive (e.g., [1, 2])
+                if final_cited_numbers and sorted(final_cited_numbers) != list(range(1, len(citations) + 1)):
+                    final_mapping = {}
+                    for new_pos, old_pos in enumerate(sorted(final_cited_numbers), start=1):
+                        final_mapping[old_pos] = new_pos
+
+                    # Replace citation numbers in descending order to avoid conflicts
+                    for old_pos in sorted(final_cited_numbers, reverse=True):
+                        new_pos = final_mapping[old_pos]
+                        answer = answer.replace(f'[{old_pos}]', f'[{new_pos}]')
+
+                    logger.info(f"Final renumbering to consecutive: {final_mapping}")
+
         # (Latency logging): Calculates and logs how long the request took in milliseconds.
         latency = round((time.time() - start_time) * 1000, 2)
         logger.info(f"✅ Chat completed in {latency}ms | Citations: {len(citations)}")
