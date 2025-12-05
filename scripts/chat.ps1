@@ -3,7 +3,7 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$Query,
-    
+
     [Parameter(Mandatory=$false)]
     [int]$TopK = 5
 )
@@ -70,4 +70,3 @@ try {
     Write-Host "Tip: Run 'docker compose ps' to check service status" -ForegroundColor DarkGray
     exit 1
 }
-

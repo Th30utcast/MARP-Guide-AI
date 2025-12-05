@@ -8,12 +8,13 @@ What this tests:
 - RabbitMQ broker can be mocked
 """
 
-import pytest
 import json
-from datetime import datetime
-from unittest.mock import Mock
 import sys
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import Mock
+
+import pytest
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -33,7 +34,7 @@ class TestEventCreation:
             title="Test Document",
             url="/app/pdfs/test.pdf",
             file_size=1024,
-            original_url="https://example.com/test.pdf"
+            original_url="https://example.com/test.pdf",
         )
 
         # Check structure
@@ -61,7 +62,7 @@ class TestEventCreation:
             text_extracted=True,
             pdf_metadata={"title": "Test", "author": "Author"},
             extraction_method="pdfplumber",
-            url="https://example.com/test.pdf"
+            url="https://example.com/test.pdf",
         )
 
         assert event["eventType"] == "DocumentExtracted"
@@ -82,7 +83,7 @@ class TestEventCreation:
             chunk_count=50,
             embedding_model="all-MiniLM-L6-v2",
             vector_dim=384,
-            index_name="marp-documents"
+            index_name="marp-documents",
         )
 
         assert event["eventType"] == "ChunksIndexed"
@@ -101,7 +102,7 @@ class TestEventCreation:
             top_k=5,
             result_count=5,
             latency_ms=42.5,
-            results_summary=[{"documentId": "test", "chunkIndex": 0, "score": 0.9}]
+            results_summary=[{"documentId": "test", "chunkIndex": 0, "score": 0.9}],
         )
 
         assert event["eventType"] == "RetrievalCompleted"
@@ -116,10 +117,7 @@ class TestEventCreation:
     def test_extraction_failed_event(self):
         """Test ExtractionFailed event creation."""
         event = events.create_extraction_failed_event(
-            document_id="test-doc",
-            correlation_id="corr-123",
-            error_message="PDF file corrupted",
-            error_type="FileError"
+            document_id="test-doc", correlation_id="corr-123", error_message="PDF file corrupted", error_type="FileError"
         )
 
         assert event["eventType"] == "ExtractionFailed"
@@ -160,13 +158,13 @@ class TestRoutingKeys:
 
     def test_routing_keys_exist(self):
         """Test all routing keys are defined."""
-        assert hasattr(events, 'ROUTING_KEY_DISCOVERED')
-        assert hasattr(events, 'ROUTING_KEY_EXTRACTED')
-        assert hasattr(events, 'ROUTING_KEY_INDEXED')
-        assert hasattr(events, 'ROUTING_KEY_INGESTION_FAILED')
-        assert hasattr(events, 'ROUTING_KEY_EXTRACTION_FAILED')
-        assert hasattr(events, 'ROUTING_KEY_INDEXING_FAILED')
-        assert hasattr(events, 'ROUTING_KEY_RETRIEVAL_COMPLETED')
+        assert hasattr(events, "ROUTING_KEY_DISCOVERED")
+        assert hasattr(events, "ROUTING_KEY_EXTRACTED")
+        assert hasattr(events, "ROUTING_KEY_INDEXED")
+        assert hasattr(events, "ROUTING_KEY_INGESTION_FAILED")
+        assert hasattr(events, "ROUTING_KEY_EXTRACTION_FAILED")
+        assert hasattr(events, "ROUTING_KEY_INDEXING_FAILED")
+        assert hasattr(events, "ROUTING_KEY_RETRIEVAL_COMPLETED")
 
     def test_routing_key_format(self):
         """Test routing keys follow correct format."""

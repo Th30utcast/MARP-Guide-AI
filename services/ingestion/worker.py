@@ -19,11 +19,12 @@ current_dir = Path(__file__).resolve().parent
 project_root = current_dir.parent.parent
 sys.path.insert(0, str(project_root))
 
-from common.config import get_rabbitmq_broker, MARP_URL, PDF_OUTPUT_DIR, STORAGE_PATH
+from ingestion_service import IngestionService
+
+from common.config import MARP_URL, PDF_OUTPUT_DIR, STORAGE_PATH, get_rabbitmq_broker
 from common.events import ROUTING_KEY_DISCOVERED, ROUTING_KEY_INGESTION_FAILED
 from common.health import start_health_server
 from common.logging_config import setup_logging
-from ingestion_service import IngestionService
 
 logger = setup_logging(__name__)
 
@@ -48,20 +49,10 @@ if __name__ == "__main__":
 
         # Bind queues to exchange (topic routing)
         if broker.channel:
-            broker.channel.exchange_declare(
-                exchange="events",
-                exchange_type="topic",
-                durable=True
-            )
+            broker.channel.exchange_declare(exchange="events", exchange_type="topic", durable=True)
+            broker.channel.queue_bind(exchange="events", queue=ROUTING_KEY_DISCOVERED, routing_key=ROUTING_KEY_DISCOVERED)
             broker.channel.queue_bind(
-                exchange="events",
-                queue=ROUTING_KEY_DISCOVERED,
-                routing_key=ROUTING_KEY_DISCOVERED
-            )
-            broker.channel.queue_bind(
-                exchange="events",
-                queue=ROUTING_KEY_INGESTION_FAILED,
-                routing_key=ROUTING_KEY_INGESTION_FAILED
+                exchange="events", queue=ROUTING_KEY_INGESTION_FAILED, routing_key=ROUTING_KEY_INGESTION_FAILED
             )
         logger.info("✅ Queues and exchange configured")
     except Exception as e:
@@ -71,10 +62,7 @@ if __name__ == "__main__":
     # Initialize the Ingestion Service with broker and config
     try:
         ingestion_service = IngestionService(
-            event_broker=broker,
-            base_url=MARP_URL,
-            pdf_output_dir=PDF_OUTPUT_DIR,
-            storage_path=STORAGE_PATH
+            event_broker=broker, base_url=MARP_URL, pdf_output_dir=PDF_OUTPUT_DIR, storage_path=STORAGE_PATH
         )
         logger.info("✅ Ingestion service initialized")
     except Exception as e:

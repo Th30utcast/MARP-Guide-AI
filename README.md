@@ -4,17 +4,44 @@
 
 A Retrieval-Augmented Generation (RAG) chatbot that answers questions about Lancaster University's Manual of Academic Regulations and Procedures (MARP).
 
+---
+
+## Table of Contents
+
+- [Product Overview](#product-overview)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Setup](#setup)
+  - [Running the System](#running-the-system)
+  - [Testing the Chat Service](#testing-the-chat-service)
+- [Service Access Details](#service-access-details)
+- [Data Storage](#data-storage)
+- [Development](#development)
+  - [Project Structure](#project-structure)
+  - [Code Quality Tools](#code-quality-tools)
+- [Testing](#testing)
+  - [Running Tests Locally](#running-tests-locally)
+  - [CI/CD Pipeline](#cicd-pipeline)
+- [Docker Build Optimization](#docker-build-optimization)
+- [Troubleshooting](#troubleshooting)
+- [Technology Stack](#technology-stack)
+
+---
+
 ## Product Overview
 
 **Target Audience**: Students and staff who need quick access to university regulations.
 
-**Value Proposition**: Reliable, quickly accessible information with source.
+**Value Proposition**: Reliable, quickly accessible information with proper source citations.
 
 **Key Features**:
 
 - Answers derived from MARP PDF documents
 - Properly cited (title, page number, and link)
 - Presented in an understandable manner
+
+---
 
 ## Architecture
 
@@ -123,6 +150,8 @@ For detailed architecture diagrams, see:
 - [Microservices & Broker](docs/services/Microservices_Broker.md)
 - [Event Catalogue](docs/events/event-catalogue.md)
 
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -134,22 +163,19 @@ For detailed architecture diagrams, see:
 ### Setup
 
 1. **Get an OpenRouter API Key**:
+
    - Visit [openrouter.ai](https://openrouter.ai)
    - Sign up for a free account
    - Get your API key from the dashboard
 
 2. **Configure environment variables**:
-   ```bash
-   # Open the .env file
-
-   # Edit .env and add your OpenRouter API key
-   # Replace 'your_openrouter_api_key_here' with your actual key
-   ```
 
    Your `.env` file should look like:
+
    ```bash
    OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxx
    ```
+
    **Note:** If you experience authentication issues, ensure `OPENROUTER_API_KEY` is not exported in your terminal environment (run `unset OPENROUTER_API_KEY` or use a fresh terminal).
 
 ### Running the System
@@ -161,10 +187,16 @@ For detailed architecture diagrams, see:
    cd MARP-Guide-AI
    ```
 
-2. **Start all services**:
+2. **Enable Docker BuildKit** (Windows - for faster builds):
+
+   ```powershell
+   .\scripts\enable-buildkit.ps1
+   ```
+
+3. **Start all services**:
 
    ```bash
-   docker compose up -d
+   docker compose up --build
    ```
 
    This will start:
@@ -177,28 +209,25 @@ For detailed architecture diagrams, see:
    - Retrieval Service (REST API for semantic search)
    - Chat Service (RAG-powered question answering)
 
-3. **Monitor logs**:
+4. **Monitor logs**:
 
    ```bash
    # View all services
    docker compose logs -f
 
    # View specific service
-   docker compose logs -f ingestion
-   docker compose logs -f extraction
-   docker compose logs -f indexing
-   docker compose logs -f retrieval
    docker compose logs -f chat
+   docker compose logs -f retrieval
    ```
 
-4. **Check service health**:
-   - Ingestion Service: http://localhost:8001/health
-   - Retrieval Service: http://localhost:8002/health
-   - Chat Service: http://localhost:8003/health
-   - RabbitMQ Management UI: http://localhost:15672
-   - Qdrant Dashboard: http://localhost:6333/dashboard
+5. **Check service health**:
+   - Ingestion Service: <http://localhost:8001/health>
+   - Retrieval Service: <http://localhost:8002/health>
+   - Chat Service: <http://localhost:8003/health>
+   - RabbitMQ Management UI: <http://localhost:15672>
+   - Qdrant Dashboard: <http://localhost:6333/dashboard>
 
-### Testing the Chat Service (RAG Q&A)
+### Testing the Chat Service
 
 The **easiest way** to test the chat service is using the provided scripts:
 
@@ -207,31 +236,31 @@ The **easiest way** to test the chat service is using the provided scripts:
 **Mac/Linux:**
 
 ```bash
-./chat.sh "What happens if I am ill during exams?"
+./scripts/chat.sh "What happens if I am ill during exams?"
 ```
 
 **Windows Command Prompt:**
 
 ```cmd
-chat.bat "What happens if I am ill during exams?"
+scripts\chat.bat "What happens if I am ill during exams?"
 ```
 
 **Windows PowerShell:**
 
 ```powershell
-.\chat.ps1 -Query "What happens if I am ill during exams?"
+.\scripts\chat.ps1 -Query "What happens if I am ill during exams?"
 ```
 
 **Optional parameters:**
 
 ```bash
 # Specify number of results to retrieve (default: 5)
-./chat.sh "What is MARP?" 3
+./scripts/chat.sh "What is MARP?" 3
 ```
 
 #### Browser Testing (Interactive API)
 
-1. **Open your browser** and go to: http://localhost:8003/docs
+1. Open your browser and go to: <http://localhost:8003/docs>
 2. Click on **POST /chat**
 3. Click **"Try it out"**
 4. Enter your query:
@@ -266,21 +295,6 @@ Invoke-RestMethod -Uri http://localhost:8003/chat `
   -Method POST -ContentType "application/json" -Body $body
 ```
 
-### Testing the Ingestion Service
-
-**Browser Method (Easiest):**
-
-1. Visit the **FastAPI Interactive Docs**: http://localhost:8001/docs
-2. Find the `POST /ingest` endpoint
-3. Click "Try it out" → "Execute"
-4. View the response directly in the browser
-
-**Check these URLs in your browser:**
-
-- Service Info: http://localhost:8001/
-- Health Check: http://localhost:8001/health
-- Statistics: http://localhost:8001/stats
-
 ### Stopping the System
 
 ```bash
@@ -293,88 +307,47 @@ To also remove volumes (PDFs and vector data):
 docker compose down -v
 ```
 
+---
+
 ## Service Access Details
 
 ### RabbitMQ Management UI
 
-- **URL**: http://localhost:15672
+- **URL**: <http://localhost:15672>
 - **Username**: `guest`
 - **Password**: `guest`
-
-**Key queues to monitor**:
-
-- `documents.discovered` - PDFs ready for extraction
-- `documents.extracted` - Text ready for indexing
-- `documents.indexed` - Documents indexed in Qdrant
+- **Key queues**: `documents.discovered`, `documents.extracted`, `documents.indexed`
 
 ### Qdrant Vector Database
 
-- **HTTP API**: http://localhost:6333
-- **Dashboard**: http://localhost:6333/dashboard
-
-**Keys to monitor**:
-
-- View collections (look for `marp-documents`)
-- Browse indexed vectors
-- Check indexing status
-- Test search queries
-
-**Collection details**:
-
-- Name: `marp-documents`
-- Vector size: 384 dimensions
-- Distance metric: Cosine similarity
-- Embedding model: `all-MiniLM-L6-v2`
+- **HTTP API**: <http://localhost:6333>
+- **Dashboard**: <http://localhost:6333/dashboard>
+- **Collection**: `marp-documents` (384 dimensions, cosine similarity)
+- **Embedding Model**: `all-MiniLM-L6-v2`
 
 ### Ingestion Service
 
-- **Health Check**: http://localhost:8001/health
-- **Note**: Ingestion is a worker service that runs automatically on startup (not a REST API)
+- **Health Check**: <http://localhost:8001/health>
+- **Interactive Docs**: <http://localhost:8001/docs>
+- **Statistics**: <http://localhost:8001/stats>
 
 ### Retrieval Service API
 
-- **URL**: http://localhost:8002
-- **Interactive Docs**: http://localhost:8002/docs
+- **URL**: <http://localhost:8002>
+- **Interactive Docs**: <http://localhost:8002/docs>
 - **Endpoints**:
-  - `GET /health` - Health check (returns model info and collection status)
+  - `GET /health` - Health check
   - `POST /search` - Semantic search endpoint
-    - **Request Body**:
-      ```json
-      {
-        "query": "your search query",
-        "top_k": 5
-      }
-      ```
-    - **Response**: Returns top-k results with:
-      - `text` - Relevant text snippet
-      - `title` - Document title
-      - `page` - Page number
-      - `url` - Link to original PDF
-      - `document_id` - Unique document identifier
-      - `chunk_index` - Position within document
-      - `score` - Relevance score (0-1, higher is better)
 
 ### Chat Service API
 
-- **URL**: http://localhost:8003
-- **Interactive Docs**: http://localhost:8003/docs
+- **URL**: <http://localhost:8003>
+- **Interactive Docs**: <http://localhost:8003/docs>
 - **Endpoints**:
   - `GET /health` - Health check
-  - `POST /chat` - RAG-powered question answering
-    - **Request Body**:
-      ```json
-      {
-        "query": "your question",
-        "top_k": 5
-      }
-      ```
-    - **Response**: Returns generated answer with citations:
-      - `query` - The user's question
-      - `answer` - Generated answer based on MARP documents
-      - `citations` - Array of sources:
-        - `title` - Document title
-        - `page` - Page number
-        - `url` - Link to original PDF
+  - `POST /chat` - RAG-powered question answering with citations
+
+---
 
 ## Data Storage
 
@@ -403,57 +376,106 @@ storage/extracted/{documentId}/
   indexed.json       # ChunksIndexed event
 ```
 
+---
+
 ## Development
 
 ### Project Structure
 
 ```
 MARP-Guide-AI/
+├── .github/
+│   └── workflows/
+│       └── ci.yml              # CI/CD pipeline configuration
 ├── services/
-│   ├── ingestion/          # PDF discovery and download
-│   │   ├── ingestion_service.py  # Core service logic
-│   │   └── worker.py             # RabbitMQ consumer
-│   ├── extraction/         # PDF text extraction
+│   ├── ingestion/              # PDF discovery and download
+│   │   ├── ingestion_service.py
+│   │   └── worker.py
+│   ├── extraction/             # PDF text extraction
 │   │   ├── extraction_service.py
-│   │   └── worker.py       # RabbitMQ consumer
-│   ├── indexing/           # Chunking and embeddings
+│   │   └── worker.py
+│   ├── indexing/               # Chunking and embeddings
 │   │   ├── indexing_service.py
-│   │   └── worker.py       # RabbitMQ consumer
-│   ├── retrieval/          # Semantic search API
-│   │   ├── retrieval_service.py  # FastAPI application
-│   │   ├── retrieval_utils.py    # Helper functions
-│   │   └── worker.py             # Event monitor
-│   └── chat/               # RAG-powered Q&A
-│       ├── chat_service.py       # FastAPI application
-│       ├── retrieval_client.py   # HTTP client for retrieval
-│       ├── openrouter_client.py  # LLM API client
-│       └── prompt_templates.py   # RAG prompt templates
-├── common/                 # Shared modules
-│   ├── events.py           # Event schemas and helpers
-│   ├── mq.py               # RabbitMQ broker wrapper
-│   ├── health.py           # Health check utilities
-│   └── logging_config.py   # Logging configuration
-├── docs/
-│   ├── services/          # Service documentation
-│   ├── diagrams/          # Architecture diagrams
-│   ├── events/            # Event catalogue
-│   └── scrum/             # Product backlog and goals
-├── pdfs/                  # Downloaded MARP PDFs
-├── storage/extracted/     # Event-sourced data
-├── chat.sh                # Chat CLI script (Linux/Mac)
-├── chat.bat               # Chat CLI script (Windows CMD)
-├── chat.ps1               # Chat CLI script (Windows PowerShell)
-└── docker-compose.yml     # Service orchestration
+│   │   └── worker.py
+│   ├── retrieval/              # Semantic search API
+│   │   ├── retrieval_service.py
+│   │   ├── retrieval_utils.py
+│   │   └── worker.py
+│   └── chat/                   # RAG-powered Q&A
+│       ├── chat_service.py
+│       ├── retrieval_client.py
+│       ├── openrouter_client.py
+│       └── prompt_templates.py
+├── common/                     # Shared modules
+│   ├── events.py               # Event schemas
+│   ├── mq.py                   # RabbitMQ utilities
+│   ├── health.py               # Health checks
+│   └── logging_config.py       # Logging setup
+├── tests/                      # All test files
+│   ├── test_ingestion.py
+│   ├── test_extraction.py
+│   ├── test_indexing.py
+│   ├── test_retrieval.py
+│   ├── test_chat.py
+│   ├── test_common.py
+│   ├── test_integration.py
+│   └── README.md               # Testing documentation
+├── scripts/                    # Utility scripts
+│   ├── chat.sh                 # Chat CLI (Linux/Mac)
+│   ├── chat.bat                # Chat CLI (Windows CMD)
+│   ├── chat.ps1                # Chat CLI (Windows PowerShell)
+│   └── enable-buildkit.ps1     # Enable Docker BuildKit
+├── docs/                       # Documentation
+│   ├── services/               # Service documentation
+│   ├── events/                 # Event catalogue
+│   └── scrum/                  # Sprint planning
+├── pdfs/                       # Downloaded MARP PDFs
+├── storage/                    # Extracted content storage
+├── pyproject.toml              # Python tool configuration
+├── requirements-test.txt       # Test dependencies
+└── docker-compose.yml          # Service orchestration
 ```
+
+### Code Quality Tools
+
+Configuration is centralized in `pyproject.toml`:
+
+**Format code:**
+
+```bash
+black services/ common/ tests/
+isort services/ common/ tests/
+```
+
+**Lint code:**
+
+```bash
+flake8 services/ common/ tests/
+```
+
+**Configuration:**
+
+- **black**: Code formatter (line length: 127)
+- **isort**: Import sorter (compatible with black)
+- **flake8**: Linter for code quality
+- **pytest**: Test framework with coverage
+- **coverage**: Code coverage tracking
+
+---
 
 ## Testing
 
 ### Running Tests Locally
 
-```bash
-# Install test dependencies
-pip install -r requirements-test.txt
+**Install test dependencies:**
 
+```bash
+pip install -r requirements-test.txt
+```
+
+**Run all tests:**
+
+```bash
 # Run all tests
 pytest
 
@@ -461,30 +483,157 @@ pytest
 pytest --cov=common --cov=services --cov-report=html
 
 # Run specific test file
-pytest tests/test_common.py -v
+pytest tests/test_retrieval.py -v
+
+# Run specific test function
+pytest tests/test_retrieval.py::test_search_endpoint_success -v
 ```
 
-See [tests/README.md](tests/README.md) for detailed testing documentation.
+**Run tests by marker:**
 
-### Continuous Integration
+```bash
+# Run only unit tests (fast)
+pytest -m unit
 
-The project uses **GitHub Actions** for automated testing. The CI pipeline runs on every push and pull request:
+# Run only integration tests (requires services)
+pytest -m integration
+```
 
-- **Linting**: Checks Python code for syntax errors
-- **Unit Tests**: Tests all services independently
-- **Integration Tests**: Tests service communication
-- **Docker Builds**: Ensures all images build correctly
+**View coverage report:**
 
-View the CI configuration: [.github/workflows/ci.yml](.github/workflows/ci.yml)
+```bash
+# Generate HTML report
+pytest --cov=common --cov=services --cov-report=html
 
-**CI Status**: Tests run automatically on all branches and PRs. Check the "Actions" tab on GitHub to see results.
+# Open in browser
+open htmlcov/index.html  # macOS
+start htmlcov/index.html  # Windows
+```
+
+See [tests/README.md](tests/README.md) for comprehensive testing documentation including:
+
+- Test structure and organization
+- Writing new tests
+- Mocking strategies
+- CI/CD integration
+- Troubleshooting guide
+
+### CI/CD Pipeline
+
+The project uses **GitHub Actions** for automated testing. The CI pipeline runs on every push and pull request.
+
+**Pipeline Stages:**
+
+1. **Lint** (fast, parallel)
+
+   - Code formatting checks (black, isort)
+   - Linting with flake8
+   - Syntax error detection
+
+2. **Unit Tests** (parallel, depends on lint)
+
+   - All service tests run in parallel
+   - Coverage reports generated (HTML, XML, terminal)
+   - Artifacts uploaded for download
+
+3. **Integration Tests** (sequential, depends on unit tests)
+
+   - Docker Compose starts RabbitMQ and Qdrant
+   - Proper health checks with 60-second timeouts
+   - Service logs displayed on failure
+   - Cleanup with `docker compose down -v`
+
+4. **Docker Build** (parallel with integration)
+
+   - All service images built and tested
+   - Verifies images are functional
+
+5. **Coverage Report** (final summary)
+   - Aggregates coverage from all test jobs
+   - Displays summary in GitHub Actions
+
+**CI Configuration:** [.github/workflows/ci.yml](.github/workflows/ci.yml)
+
+**Trigger Conditions:**
+
+- Push to `main`, `develop`, `feature/**`, `hotfix/**` branches
+- Pull requests to `main` and `develop`
+
+**Viewing Results:**
+
+1. Go to GitHub repository → **Actions** tab
+2. Select latest workflow run
+3. View job results and logs
+4. Download coverage artifacts
+
+**Job Dependencies:**
+
+```
+Lint (fast)
+  ↓
+Unit Tests (parallel) → Integration Tests + Docker Build (parallel)
+  ↓
+Coverage Report (summary)
+```
+
+This follows the **fail-fast** principle: linting errors stop the pipeline immediately, saving time and resources.
+
+---
+
+## Docker Build Optimization
+
+All Dockerfiles have been optimized with **BuildKit cache mounts** for significantly faster builds.
+
+### Enable BuildKit
+
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\enable-buildkit.ps1
+docker compose up --build
+```
+
+**Linux/macOS:**
+
+```bash
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
+docker compose up --build
+```
+
+**Make it permanent (Windows):**
+
+1. Press `Win + X` → System → Advanced system settings
+2. Environment Variables → New (User variables)
+3. Add: `DOCKER_BUILDKIT` = `1`
+4. Add: `COMPOSE_DOCKER_CLI_BUILD` = `1`
+
+### Performance Improvements
+
+| Build Type            | Before    | After       | Improvement              |
+| --------------------- | --------- | ----------- | ------------------------ |
+| First build           | 10-15 min | 10-15 min   | Same (needs to download) |
+| Rebuild (code change) | 10-15 min | **3-5 min** | **3-5x faster**          |
+| Rebuild (no changes)  | 8-10 min  | **30 sec**  | **16-20x faster**        |
+
+### How It Works
+
+All Dockerfiles now use:
+
+```dockerfile
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+```
+
+This caches pip downloads between builds without increasing the final image size.
+
+---
 
 ## Troubleshooting
 
 ### Docker won't start
 
 ```bash
-# View service logs for errors
 docker compose logs rabbitmq
 docker compose logs qdrant
 docker compose logs ingestion
@@ -492,191 +641,93 @@ docker compose logs ingestion
 
 ### RabbitMQ connection failed
 
-1. Check RabbitMQ is healthy:
-
-   ```bash
-   docker compose ps rabbitmq
-   ```
-
-2. Verify RabbitMQ is ready:
-
-   ```bash
-   docker compose logs rabbitmq | grep "started"
-   ```
-
-3. Restart RabbitMQ:
-   ```bash
-   docker compose restart rabbitmq
-   ```
+1. Check status: `docker compose ps rabbitmq`
+2. View logs: `docker compose logs rabbitmq | grep "started"`
+3. Restart: `docker compose restart rabbitmq`
 
 ### Qdrant connection failed
 
-1. Check Qdrant is running:
-
-   ```bash
-   docker compose ps qdrant
-   ```
-
-2. Test Qdrant API:
-
-   ```bash
-   # Linux/Mac
-   curl http://localhost:6333/collections
-
-   # Windows PowerShell
-   curl.exe http://localhost:6333/collections
-
-   # Or visit in browser: http://localhost:6333/collections
-   ```
-
-3. Restart Qdrant:
-   ```bash
-   docker compose restart qdrant
-   ```
+1. Check status: `docker compose ps qdrant`
+2. Test API: `curl http://localhost:6333/collections`
+3. Restart: `docker compose restart qdrant`
 
 ### No PDFs being downloaded
 
-1. Check ingestion service logs:
-
-   ```bash
-   docker compose logs ingestion
-   ```
-
-2. Check if PDFs already exist:
-
-   ```bash
-   # Linux/Mac
-   curl http://localhost:8001/stats
-
-   # Windows PowerShell
-   curl.exe http://localhost:8001/stats
-
-   # Or visit in browser: http://localhost:8001/stats
-   ```
-
-3. Manually trigger ingestion:
-
-   ```bash
-   # Linux/Mac
-   curl -X POST http://localhost:8001/ingest
-
-   # Windows PowerShell
-   curl.exe -X POST http://localhost:8001/ingest
-
-   # Or use browser: http://localhost:8001/docs
-   ```
-
-4. Check network connectivity to Lancaster website
+1. Check logs: `docker compose logs ingestion`
+2. Check stats: Visit <http://localhost:8001/stats>
+3. Manually trigger: Visit <http://localhost:8001/docs> → `POST /ingest`
 
 ### Events not flowing through pipeline
 
-1. Check RabbitMQ queues:
+1. Check RabbitMQ queues: <http://localhost:15672> (guest/guest)
+2. Verify service health: <http://localhost:8001/health>
+3. Check worker logs: `docker compose logs extraction indexing`
 
-   - Visit http://localhost:15672
-   - Login with guest/guest
-   - Check "Queues" tab for message counts
+### Tests failing locally
 
-2. Verify service health:
+1. Ensure dependencies installed: `pip install -r requirements-test.txt`
+2. Run from project root: `cd MARP-Guide-AI && pytest`
+3. For integration tests: `docker compose up -d rabbitmq qdrant`
 
-   ```bash
-   # Linux/Mac
-   curl http://localhost:8001/health
-
-   # Windows PowerShell
-   curl.exe http://localhost:8001/health
-
-   # Or visit in browser: http://localhost:8001/health
-   ```
-
-3. Check worker logs for errors:
-   ```bash
-   docker compose logs extraction
-   docker compose logs indexing
-   ```
+---
 
 ## Technology Stack
 
 ### Core Infrastructure
 
-| Technology         | Version         | Purpose                                      |
-| ------------------ | --------------- | -------------------------------------------- |
-| **Docker**         | Latest          | Containerization platform                    |
-| **Docker Compose** | Latest          | Multi-container orchestration                |
-| **RabbitMQ**       | 3.12-management | Message broker for event-driven architecture |
-| **Qdrant**         | Latest          | Vector database for semantic search          |
+| Technology     | Version         | Purpose                       |
+| -------------- | --------------- | ----------------------------- |
+| Docker         | Latest          | Containerization platform     |
+| Docker Compose | Latest          | Multi-container orchestration |
+| RabbitMQ       | 3.12-management | Message broker                |
+| Qdrant         | Latest          | Vector database               |
 
-### Ingestion Service
+### Python Services
 
-| Technology         | Version | Purpose                                  |
-| ------------------ | ------- | ---------------------------------------- |
-| **FastAPI**        | 0.104.1 | Modern Python web framework for REST API |
-| **Uvicorn**        | 0.24.0  | ASGI server for FastAPI                  |
-| **BeautifulSoup4** | 4.12.2  | HTML parsing and web scraping            |
-| **lxml**           | 5.0.0+  | XML/HTML parser for BeautifulSoup        |
-| **Requests**       | 2.31.0  | HTTP client for downloading PDFs         |
-| **Pika**           | 1.3.2   | RabbitMQ client for Python               |
+| Technology | Version | Purpose                     |
+| ---------- | ------- | --------------------------- |
+| Python     | 3.11    | Programming language        |
+| FastAPI    | 0.104.1 | Web framework for REST APIs |
+| Uvicorn    | 0.24.0  | ASGI server                 |
+| Pydantic   | 2.0+    | Data validation             |
+| Pika       | 1.3.2   | RabbitMQ client             |
 
-### Extraction Service
+### Data Processing
 
-| Technology     | Version | Purpose                              |
-| -------------- | ------- | ------------------------------------ |
-| **pdfplumber** | 0.10.3  | PDF text extraction library          |
-| **Pika**       | 1.3.2   | RabbitMQ client for consuming events |
+| Technology            | Version | Purpose              |
+| --------------------- | ------- | -------------------- |
+| sentence-transformers | 3.0.0+  | Generate embeddings  |
+| qdrant-client         | 1.7.0   | Qdrant Python client |
+| pdfplumber            | 0.10.3  | PDF text extraction  |
+| BeautifulSoup4        | 4.12.2  | HTML parsing         |
+| httpx                 | Latest  | Async HTTP client    |
 
-### Indexing Service
+### AI/ML Models
 
-| Technology                | Version | Purpose                                  |
-| ------------------------- | ------- | ---------------------------------------- |
-| **sentence-transformers** | 3.0.0+  | Generate semantic embeddings             |
-| **qdrant-client**         | 1.7.0   | Python client for Qdrant vector database |
-| **NumPy**                 | 1.24.3  | Numerical computations for vectors       |
-| **Pika**                  | 1.3.2   | RabbitMQ client for consuming events     |
-
-### Retrieval Service
-
-| Technology                | Version | Purpose                                       |
-| ------------------------- | ------- | --------------------------------------------- |
-| **FastAPI**               | 0.104.1 | Modern Python web framework for REST API      |
-| **Uvicorn**               | 0.24.0  | ASGI server for FastAPI                       |
-| **sentence-transformers** | 3.0.0+  | Generate query embeddings for semantic search |
-| **qdrant-client**         | 1.7.0   | Python client for Qdrant vector database      |
-| **Pydantic**              | 2.0+    | Data validation and settings management       |
-| **Pika**                  | 1.3.2   | RabbitMQ client for publishing events         |
-
-### Chat Service
-
-| Technology     | Version | Purpose                                  |
-| -------------- | ------- | ---------------------------------------- |
-| **FastAPI**    | 0.104.1 | Modern Python web framework for REST API |
-| **Uvicorn**    | 0.24.0  | ASGI server for FastAPI                  |
-| **httpx**      | Latest  | Async HTTP client for Retrieval Service  |
-| **OpenAI SDK** | Latest  | Python client for OpenRouter API         |
-| **Pydantic**   | 2.0+    | Data validation and settings management  |
-| **OpenRouter** | API     | LLM gateway (Google/Gemma Chat 3n)         |
-
-### Embedding Model
-
-- **Model**: `all-MiniLM-L6-v2` (from sentence-transformers)
-- **Vector Dimensions**: 384
-- **Distance Metric**: Cosine similarity
-- **Use Case**: Lightweight, fast semantic search for document retrieval
-
-### LLM Model
-
-- **Provider**: OpenRouter
-- **Model**: `google/gemma-3n-e2b-it:free`
-- **Temperature**: 0.7
-- **Max Tokens**: 500
-- **Use Case**: RAG-powered question answering with citations
+- **Embedding Model**: `all-MiniLM-L6-v2` (384 dimensions, cosine similarity)
+- **LLM Provider**: OpenRouter
+- **LLM Model**: `google/gemma-3n-e2b-it:free` (Temperature: 0.7, Max Tokens: 500)
 
 ### Development Tools
 
-- **Python**: 3.9+
-- **Git**: Version control
-- **GitHub**: Repository hosting and collaboration
-<<<<<<< Updated upstream
-- **Shell Scripts**: Cross-platform CLI tools (chat.sh, chat.bat, chat.ps1)
-=======
-- **pytest**: Testing framework with coverage reporting
-- **GitHub Actions**: CI/CD pipeline for automated testing
->>>>>>> Stashed changes
+- **pytest**: Testing framework with coverage
+- **black**: Code formatter (line length: 127)
+- **isort**: Import sorter
+- **flake8**: Linter for code quality
+- **GitHub Actions**: CI/CD pipeline
+
+---
+
+## Contributors
+
+- Development Team: [Contributors](https://github.com/Th30utcast/MARP-Guide-AI/graphs/contributors)
+
+---
+
+## License
+
+This project is developed as part of Lancaster University's coursework.
+
+---
+
+**Questions or Issues?** Open an issue on [GitHub](https://github.com/Th30utcast/MARP-Guide-AI/issues)

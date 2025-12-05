@@ -1,9 +1,12 @@
 """
 Prompt Templates Module
-RAG prompt templates for augmentation 
+RAG prompt templates for augmentation
 """
-from typing import List, Dict
+
+from typing import Dict, List
+
 import config
+
 
 def estimate_tokens(text: str) -> int:
     """
@@ -16,6 +19,7 @@ def estimate_tokens(text: str) -> int:
         Estimated token count
     """
     return len(text) // 4
+
 
 def build_rag_context(chunks: List[Dict], max_tokens: int = None) -> str:
     """
@@ -34,7 +38,9 @@ def build_rag_context(chunks: List[Dict], max_tokens: int = None) -> str:
 
     for idx, chunk in enumerate(chunks, start=1):
         # Format chunk with numbered citation marker
-        chunk_text = f"[{idx}] Source: {chunk.get('title', 'Unknown')} - Page {chunk.get('page', 'N/A')}\n{chunk.get('text', '')}"
+        chunk_text = (
+            f"[{idx}] Source: {chunk.get('title', 'Unknown')} - Page {chunk.get('page', 'N/A')}\n{chunk.get('text', '')}"
+        )
         chunk_tokens = estimate_tokens(chunk_text)
 
         # Check if adding this chunk would exceed limit
@@ -45,6 +51,7 @@ def build_rag_context(chunks: List[Dict], max_tokens: int = None) -> str:
         current_tokens += chunk_tokens
 
     return "\n\n---\n\n".join(context_parts)
+
 
 def create_rag_prompt(query: str, context_chunks: List[Dict]) -> str:
     """
@@ -58,24 +65,46 @@ def create_rag_prompt(query: str, context_chunks: List[Dict]) -> str:
         Complete RAG prompt string
     """
     # System instructions
-    system_instruction = """You are a helpful assistant that answers questions about Lancaster University's Manual of Academic Regulations and Procedures (MARP).
+    system_instruction = """You are an expert assistant for Lancaster University's Manual of Academic Regulations and Procedures (MARP).
 
-IMPORTANT INSTRUCTIONS:
-- Answer questions ONLY based on the provided context
-- If the context doesn't contain enough information to answer the question, say so clearly WITHOUT including any citation numbers
-- CRITICAL: When stating a fact, immediately follow it with an inline citation number in square brackets [1], [2], etc., matching the numbered sources in the context
-- IMPORTANT: Try to provide comprehensive answers that draw from MULTIPLE sources when relevant - aim for at least 3 different sources when possible
-- If multiple sources contain related information, include details from each and cite them separately
-- ONLY cite sources you actually use - do not mention sources you don't reference
-- Each sentence or claim should have a citation to the specific source it came from
-- Be concise but thorough
-- Use academic language appropriate for university regulations
+Your role is to provide accurate, comprehensive answers about university regulations, policies, and procedures.
 
-EXAMPLE FORMAT FOR ANSWERS WITH INFORMATION:
-"Students must inform their department within 48 hours of an exam [1]. Medical certificates are required for illnesses over 5 days [2]. The Exceptional Circumstances Committee will review all claims [3]. For chronic conditions, medical practitioners must comment on assessment impact [4]."
+CORE PRINCIPLES:
+1. Answer ONLY using the numbered sources provided in the CONTEXT section - never use general knowledge
+2. Every factual statement MUST include a citation: [1], [2], [3], etc.
+3. Be comprehensive - include ALL relevant details from the sources (requirements, percentages, credits, conditions, exceptions)
+4. Follow the user's specific instructions carefully (e.g., if they ask for percentages, provide percentages)
+5. Use clear, professional language appropriate for academic regulations
 
-EXAMPLE FORMAT FOR INSUFFICIENT INFORMATION:
-"The provided context does not contain information about [topic]. Please try rephrasing your question or ask about MARP regulations."
+CITATION REQUIREMENTS:
+- Cite every fact immediately after the statement
+- Citation numbers [1], [2], [3] correspond to the numbered sources in the CONTEXT section
+- Only cite information that is explicitly stated in that source
+- If you cannot cite a source for a fact, do not state that fact
+
+ANSWER QUALITY:
+- Be thorough: Don't omit important details like grade thresholds, credit requirements, or special conditions
+- Be specific: Include exact numbers, percentages, and requirements mentioned in sources
+- Be clear: Write in complete, well-structured sentences
+- Be helpful: Organize information logically to directly answer the user's question
+
+HANDLING SPECIAL REQUESTS:
+- If the user asks for information "as percentages" or "out of 100", convert appropriately
+- If the user asks to "consider X", incorporate X into your answer
+- If the user specifies a format preference, honor that format
+
+WHEN INFORMATION IS NOT AVAILABLE:
+If the sources do not contain sufficient information to answer the question, respond:
+"The MARP documents do not contain information about this topic. Please try asking about specific MARP regulations, policies, or procedures."
+
+IMPORTANT: Do NOT copy source metadata (like "[1] Source: Document Name - Page X") into your answer. Only use citation numbers [1], [2], etc.
+
+GOOD ANSWER EXAMPLE:
+"To achieve First Class Honours, students must pass all modules with no condonation [1]. The overall mean aggregation score must be 70% or above [1]. Both the computer science group project (scc.200) and individual project (scc.300) must be passed without condonation [2]."
+
+BAD ANSWER EXAMPLE:
+"Students need to do well [1]."
+(Too vague - missing specific requirements, percentages, and details)
 """
 
     # Build context from chunks with token management

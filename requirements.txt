@@ -1,0 +1,65 @@
+# MARP Guide AI - Consolidated Requirements
+# This file combines all dependencies from all services for local development
+# For production, each service uses its own requirements.txt in services/*/requirements.txt
+
+# ==============================================================================
+# Core Web Framework (used by ingestion, retrieval, chat services)
+# ==============================================================================
+fastapi==0.104.1
+uvicorn==0.24.0
+starlette==0.27.0
+
+# ==============================================================================
+# Message Queue (used by all services for event-driven communication)
+# ==============================================================================
+pika==1.3.2
+
+# ==============================================================================
+# HTTP Client Libraries
+# ==============================================================================
+httpx==0.25.2  # Used by chat service and testing
+requests==2.31.0  # Used by ingestion service for scraping and testing
+
+# ==============================================================================
+# PDF Processing (extraction service)
+# ==============================================================================
+pdfplumber==0.10.3
+
+# ==============================================================================
+# Web Scraping (ingestion service)
+# ==============================================================================
+beautifulsoup4==4.12.2
+lxml>=5.0.0
+
+# ==============================================================================
+# Machine Learning & Embeddings (indexing & retrieval services)
+# ==============================================================================
+sentence-transformers>=3.0.0
+numpy==1.24.3
+
+# ==============================================================================
+# Vector Database (indexing & retrieval services)
+# ==============================================================================
+qdrant-client==1.7.0
+
+# ==============================================================================
+# LLM Integration (chat service)
+# ==============================================================================
+openai
+
+# ==============================================================================
+# Testing Framework & Tools
+# ==============================================================================
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+pytest-asyncio==0.21.1
+responses==0.24.1
+
+# ==============================================================================
+# Code Quality & Formatting Tools
+# ==============================================================================
+black==23.11.0
+flake8==6.1.0
+isort  # Using pyproject.toml for configuration
+pre-commit  # Git hooks for automatic formatting before commits

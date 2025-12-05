@@ -21,18 +21,19 @@ import json
 import sys
 from pathlib import Path
 
-
 current_dir = Path(__file__).resolve().parent
 project_root = current_dir
 sys.path.insert(0, str(project_root))
+
+from extraction_service import ExtractionService
 
 from common.config import get_rabbitmq_broker, get_storage_path
 from common.events import ROUTING_KEY_DISCOVERED, ROUTING_KEY_EXTRACTED, ROUTING_KEY_EXTRACTION_FAILED
 from common.health import start_health_server
 from common.logging_config import setup_logging
-from extraction_service import ExtractionService
 
 logger = setup_logging(__name__)
+
 
 def process_document_discovered(ch, method, properties, body):
     """
@@ -43,15 +44,15 @@ def process_document_discovered(ch, method, properties, body):
     try:
         # Decode the message body
         event = json.loads(body)
-        
+
         # Validate event structure
         if "payload" not in event or "documentId" not in event.get("payload", {}):
             logger.error(f"❌ Invalid event structure: {event}")
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
-        
+
         logger.info(f"📥 Received DocumentDiscovered: {event['payload']['documentId']}")
-        
+
         # Process the event
         result = extraction_service.handle_document_discovered_event(event)
 
@@ -63,7 +64,7 @@ def process_document_discovered(ch, method, properties, body):
             # Acknowledge message to remove from queue and continue processing
             logger.warning(f"⚠️ Processing failed for {event['payload']['documentId']}, but continuing...")
             ch.basic_ack(delivery_tag=method.delivery_tag)
-            
+
     except json.JSONDecodeError as e:
         logger.error(f"❌ JSON parsing error: {e}")
         logger.error(f"Body content: {body}")
@@ -80,6 +81,7 @@ def process_document_discovered(ch, method, properties, body):
         # For unexpected worker errors, acknowledge to prevent infinite loop
         logger.warning("⚠️ Unexpected error, acknowledging to continue processing...")
         ch.basic_ack(delivery_tag=method.delivery_tag)
+
 
 if __name__ == "__main__":
     logger.info("🚀 Initializing Extraction Service Worker...")
@@ -100,25 +102,11 @@ if __name__ == "__main__":
         broker.declare_queue(ROUTING_KEY_EXTRACTION_FAILED)
 
         if broker.channel:
-            broker.channel.exchange_declare(
-                exchange="events",
-                exchange_type="topic",
-                durable=True
-            )
+            broker.channel.exchange_declare(exchange="events", exchange_type="topic", durable=True)
+            broker.channel.queue_bind(exchange="events", queue=ROUTING_KEY_DISCOVERED, routing_key=ROUTING_KEY_DISCOVERED)
+            broker.channel.queue_bind(exchange="events", queue=ROUTING_KEY_EXTRACTED, routing_key=ROUTING_KEY_EXTRACTED)
             broker.channel.queue_bind(
-                exchange="events",
-                queue=ROUTING_KEY_DISCOVERED,
-                routing_key=ROUTING_KEY_DISCOVERED
-            )
-            broker.channel.queue_bind(
-                exchange="events",
-                queue=ROUTING_KEY_EXTRACTED,
-                routing_key=ROUTING_KEY_EXTRACTED
-            )
-            broker.channel.queue_bind(
-                exchange="events",
-                queue=ROUTING_KEY_EXTRACTION_FAILED,
-                routing_key=ROUTING_KEY_EXTRACTION_FAILED
+                exchange="events", queue=ROUTING_KEY_EXTRACTION_FAILED, routing_key=ROUTING_KEY_EXTRACTION_FAILED
             )
         logger.info("✅ Queues and exchange configured")
     except Exception as e:
@@ -127,10 +115,7 @@ if __name__ == "__main__":
 
     # Initialize extraction service with storage path
     storage_path = get_storage_path()
-    extraction_service = ExtractionService(
-        event_broker=broker,
-        storage_path=str(storage_path)
-    )
+    extraction_service = ExtractionService(event_broker=broker, storage_path=str(storage_path))
     logger.info(f"✅ Extraction service initialized. Storage: {storage_path}")
 
     # Start health check server
@@ -140,11 +125,7 @@ if __name__ == "__main__":
     logger.info("Press Ctrl+C to stop")
 
     try:
-        broker.consume(
-            queue_name=ROUTING_KEY_DISCOVERED,
-            callback=process_document_discovered,
-            auto_ack=False
-        )
+        broker.consume(queue_name=ROUTING_KEY_DISCOVERED, callback=process_document_discovered, auto_ack=False)
     except KeyboardInterrupt:
         logger.info("\n⏹️ Shutting down gracefully...")
         broker.close()

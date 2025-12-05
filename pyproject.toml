@@ -1,0 +1,58 @@
+# pyproject.toml - Configuration for Python code quality tools
+# As recommended in Week 8 lecture slides
+
+[tool.black]
+line-length = 127  # Match flake8 setting
+target-version = ['py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | venv
+  | build
+  | dist
+  | __pycache__
+  | \.pytest_cache
+  | htmlcov
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 127
+skip = [".venv", "venv", "build", "dist", "__pycache__"]
+known_first_party = ["common", "services"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+[tool.pytest.ini_options]
+# Pytest configuration
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short --strict-markers"
+# Note: Warnings are enabled by default (--disable-warnings removed for better code quality)
+markers = [
+    "unit: Unit tests (fast, no external dependencies)",
+    "integration: Integration tests (require services running)",
+    "slow: Slow running tests",
+]
+
+[tool.coverage.run]
+source = ["common", "services"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+# Fail if coverage is below 70% (recommended by professor)
+# Uncomment when ready:
+# fail_under = 70
