@@ -34,18 +34,18 @@ ENABLE_MULTI_MODEL_COMPARISON = os.getenv("ENABLE_MULTI_MODEL_COMPARISON", "fals
 
 COMPARISON_MODELS = [
     {
-        "id": "google/gemini-2.5-pro-exp-03-25:free",
-        "name": "Google Gemini 2.5 Pro",
-        "description": "Strong reasoning for complex questions",
+        "id": "openai/gpt-4o-mini",
+        "name": "GPT-4o Mini",
+        "description": "Fast and efficient for general questions",
     },
     {
-        "id": "deepseek/deepseek-chat-v3-0324:free",
-        "name": "DeepSeek Chat V3",
+        "id": "google/gemma-3n-e2b-it:free",
+        "name": "Google Gemma 3n 2B",
+        "description": "Lightweight and fast Google model",
+    },
+    {
+        "id": "deepseek/deepseek-chat",
+        "name": "DeepSeek Chat",
         "description": "Dialogue-optimized for conversational QA",
-    },
-    {
-        "id": "mistralai/mistral-small-3.1-24b-instruct:free",
-        "name": "Mistral Small 3.1",
-        "description": "Structured responses and reasoning",
     },
 ]

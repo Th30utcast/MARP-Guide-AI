@@ -11,6 +11,7 @@ export function useChat() {
     // Load from localStorage if exists
     return localStorage.getItem('selectedModel') || null
   })
+  const [queryCount, setQueryCount] = useState(0)
 
   const sendMessage = async (query) => {
     const userMessage = { role: 'user', content: query }
@@ -20,8 +21,15 @@ export function useChat() {
     setLastQuery(query)
 
     try {
-      // If no model selected yet (first query), trigger comparison
-      if (!selectedModel) {
+      // Count how many user queries have been sent
+      const currentQueryCount = queryCount + 1
+      setQueryCount(currentQueryCount)
+
+      // First query: Use GPT-4o Mini by default (no comparison)
+      // Second query: Trigger comparison if no model selected yet
+      // Third+ query: Use selected model
+      if (currentQueryCount === 2 && !selectedModel) {
+        // Second query - trigger comparison
         const comparisonResult = await sendComparisonQuery(query)
         setComparisonData(comparisonResult)
         setIsLoading(false)
@@ -29,7 +37,7 @@ export function useChat() {
         return
       }
 
-      // Normal flow: use selected model
+      // Normal flow: use GPT-4o Mini (first query) or selected model (after selection)
       const response = await sendChatQuery(query)
       const assistantMessage = {
         role: 'assistant',
@@ -81,6 +89,7 @@ export function useChat() {
     setSelectedModel(null)
     localStorage.removeItem('selectedModel')
     setMessages([])
+    setQueryCount(0)
   }
 
   return {
