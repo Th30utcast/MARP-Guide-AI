@@ -77,9 +77,18 @@ def chat(req: ChatRequest):
     start_time = time.time()
 
     try:
+        # (Step 0 - Query Reformulation): Clean up query to fix typos and improve phrasing
+        search_query = req.query
+        if config.ENABLE_QUERY_REFORMULATION:
+            logger.info(f"🔧 Step 0: Reformulating query to fix typos and improve clarity")
+            search_query = openrouter_client.reformulate_query(req.query)
+            if search_query != req.query:
+                logger.info(f"📝 Original: {req.query}")
+                logger.info(f"✨ Reformulated: {search_query}")
+
         # (Step 1 - Retrieval): Logs and searches for relevant document chunks using the retrieval client.
-        logger.info(f"🔍 Step 1: Retrieving chunks for query: {req.query[:50]}...")
-        chunks = retrieval_client.search(req.query, req.top_k)
+        logger.info(f"🔍 Step 1: Retrieving chunks for query: {search_query[:50]}...")
+        chunks = retrieval_client.search(search_query, req.top_k)
 
         # (No chunks handling): If no chunks are found, returns an error message with empty citations.
         if not chunks:
