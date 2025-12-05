@@ -35,3 +35,28 @@ export async function sendChatQuery(query) {
     )
   }
 }
+
+export async function sendComparisonQuery(query) {
+  try {
+    const response = await axios.post(
+      '/api/chat/compare',
+      { query },
+      { timeout: 60000 } // 60 second timeout for parallel generation
+    )
+    return response.data
+  } catch (error) {
+    if (error.code === 'ECONNABORTED') {
+      throw new ChatApiError('Request timeout. Please try again.', 408)
+    }
+    if (!error.response) {
+      throw new ChatApiError('Network error. Check your connection.', 0)
+    }
+    if (error.response.status >= 500) {
+      throw new ChatApiError('Service error. Try rephrasing your question.', 500)
+    }
+    throw new ChatApiError(
+      error.response.data?.detail || 'Unknown error',
+      error.response.status
+    )
+  }
+}

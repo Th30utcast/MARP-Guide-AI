@@ -28,3 +28,24 @@ MAX_TOKENS = 1200  # Increased to prevent cutoff and repetition
 # Query Reformulation Configuration
 ENABLE_QUERY_REFORMULATION = os.getenv("ENABLE_QUERY_REFORMULATION", "true").lower() == "true"
 # Set to False to disable query reformulation (e.g., for testing or debugging)
+
+# Multi-Model Comparison Configuration (Tier 2-D)
+ENABLE_MULTI_MODEL_COMPARISON = os.getenv("ENABLE_MULTI_MODEL_COMPARISON", "false").lower() == "true"
+
+COMPARISON_MODELS = [
+    {
+        "id": "google/gemini-2.5-pro-exp-03-25:free",
+        "name": "Google Gemini 2.5 Pro",
+        "description": "Strong reasoning for complex questions",
+    },
+    {
+        "id": "deepseek/deepseek-chat-v3-0324:free",
+        "name": "DeepSeek Chat V3",
+        "description": "Dialogue-optimized for conversational QA",
+    },
+    {
+        "id": "mistralai/mistral-small-3.1-24b-instruct:free",
+        "name": "Mistral Small 3.1",
+        "description": "Structured responses and reasoning",
+    },
+]
