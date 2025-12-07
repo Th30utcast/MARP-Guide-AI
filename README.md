@@ -36,6 +36,7 @@ A Retrieval-Augmented Generation (RAG) chatbot that answers questions about Lanc
 **Value Proposition**: Reliable, quickly accessible information with proper source citations.
 
 **Key Features**:
+
 - Answers derived from MARP PDF documents
 - Properly cited (title, page number, and link)
 - Presented in an understandable manner
@@ -120,6 +121,7 @@ graph TB
 ```
 
 **Legend:**
+
 - ✅ **Green** - Operational (Data Processing Pipeline)
 - **Yellow** - Infrastructure (Always-on services)
 - 🚧 **Gray Dashed** - Planned Features (Tier 1 & 2)
@@ -143,6 +145,7 @@ Ingestion → DocumentDiscovered → Extraction → DocumentExtracted → Indexi
 ```
 
 For detailed architecture diagrams, see:
+
 - [Ingestion Pipeline](docs/services/Ingestion/Ingestion_pipeline.md)
 - [Microservices & Broker](docs/services/Microservices_Broker.md)
 - [Event Catalogue](docs/events/event-catalogue.md)
@@ -160,6 +163,7 @@ For detailed architecture diagrams, see:
 ### Setup
 
 1. **Get an OpenRouter API Key**:
+
    - Visit [openrouter.ai](https://openrouter.ai)
    - Sign up for a free account
    - Get your API key from the dashboard
@@ -167,6 +171,7 @@ For detailed architecture diagrams, see:
 2. **Configure environment variables**:
 
    Your `.env` file should look like:
+
    ```bash
    OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxx
    ```
@@ -176,22 +181,26 @@ For detailed architecture diagrams, see:
 ### Running the System
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/Th30utcast/MARP-Guide-AI.git
    cd MARP-Guide-AI
    ```
 
 2. **Enable Docker BuildKit** (Windows - for faster builds):
+
    ```powershell
    .\scripts\enable-buildkit.ps1
    ```
 
 3. **Start all services**:
+
    ```bash
    docker compose up --build
    ```
 
    This will start:
+
    - RabbitMQ (message broker)
    - Qdrant (vector database)
    - Ingestion Service (auto-starts PDF discovery and download)
@@ -201,6 +210,7 @@ For detailed architecture diagrams, see:
    - Chat Service (RAG-powered question answering)
 
 4. **Monitor logs**:
+
    ```bash
    # View all services
    docker compose logs -f
@@ -224,21 +234,25 @@ The **easiest way** to test the chat service is using the provided scripts:
 #### Using Chat Scripts (Recommended)
 
 **Mac/Linux:**
+
 ```bash
 ./scripts/chat.sh "What happens if I am ill during exams?"
 ```
 
 **Windows Command Prompt:**
+
 ```cmd
 scripts\chat.bat "What happens if I am ill during exams?"
 ```
 
 **Windows PowerShell:**
+
 ```powershell
 .\scripts\chat.ps1 -Query "What happens if I am ill during exams?"
 ```
 
 **Optional parameters:**
+
 ```bash
 # Specify number of results to retrieve (default: 5)
 ./scripts/chat.sh "What is MARP?" 3
@@ -262,6 +276,7 @@ scripts\chat.bat "What happens if I am ill during exams?"
 #### Command Line Testing (Manual)
 
 **Mac/Linux:**
+
 ```bash
 curl -X POST http://localhost:8003/chat \
   -H "Content-Type: application/json" \
@@ -269,6 +284,7 @@ curl -X POST http://localhost:8003/chat \
 ```
 
 **Windows PowerShell:**
+
 ```powershell
 $body = @{
     query = "What is MARP?"
@@ -286,6 +302,7 @@ docker compose down
 ```
 
 To also remove volumes (PDFs and vector data):
+
 ```bash
 docker compose down -v
 ```
@@ -295,23 +312,27 @@ docker compose down -v
 ## Service Access Details
 
 ### RabbitMQ Management UI
+
 - **URL**: <http://localhost:15672>
 - **Username**: `guest`
 - **Password**: `guest`
 - **Key queues**: `documents.discovered`, `documents.extracted`, `documents.indexed`
 
 ### Qdrant Vector Database
+
 - **HTTP API**: <http://localhost:6333>
 - **Dashboard**: <http://localhost:6333/dashboard>
 - **Collection**: `marp-documents` (384 dimensions, cosine similarity)
 - **Embedding Model**: `all-MiniLM-L6-v2`
 
 ### Ingestion Service
+
 - **Health Check**: <http://localhost:8001/health>
 - **Interactive Docs**: <http://localhost:8001/docs>
 - **Statistics**: <http://localhost:8001/stats>
 
 ### Retrieval Service API
+
 - **URL**: <http://localhost:8002>
 - **Interactive Docs**: <http://localhost:8002/docs>
 - **Endpoints**:
@@ -319,6 +340,7 @@ docker compose down -v
   - `POST /search` - Semantic search endpoint
 
 ### Chat Service API
+
 - **URL**: <http://localhost:8003>
 - **Interactive Docs**: <http://localhost:8003/docs>
 - **Endpoints**:
@@ -330,7 +352,9 @@ docker compose down -v
 ## Data Storage
 
 ### PDFs Directory
+
 Downloaded PDFs are stored in:
+
 ```
 pdfs/
   Intro-to-MARP.pdf
@@ -340,7 +364,9 @@ pdfs/
 ```
 
 ### Extracted Data
+
 All events and extracted data are stored in:
+
 ```
 storage/extracted/{documentId}/
   discovered.json    # DocumentDiscovered event
@@ -415,17 +441,20 @@ MARP-Guide-AI/
 Configuration is centralized in `pyproject.toml`:
 
 **Format code:**
+
 ```bash
 black services/ common/ tests/
 isort services/ common/ tests/
 ```
 
 **Lint code:**
+
 ```bash
 flake8 services/ common/ tests/
 ```
 
 **Configuration:**
+
 - **black**: Code formatter (line length: 127)
 - **isort**: Import sorter (compatible with black)
 - **flake8**: Linter for code quality
@@ -439,11 +468,13 @@ flake8 services/ common/ tests/
 ### Running Tests Locally
 
 **Install test dependencies:**
+
 ```bash
 pip install -r requirements-test.txt
 ```
 
 **Run all tests:**
+
 ```bash
 # Run all tests
 pytest
@@ -459,6 +490,7 @@ pytest tests/test_retrieval.py::test_search_endpoint_success -v
 ```
 
 **Run tests by marker:**
+
 ```bash
 # Run only unit tests (fast)
 pytest -m unit
@@ -468,6 +500,7 @@ pytest -m integration
 ```
 
 **View coverage report:**
+
 ```bash
 # Generate HTML report
 pytest --cov=common --cov=services --cov-report=html
@@ -478,6 +511,7 @@ start htmlcov/index.html  # Windows
 ```
 
 See [tests/README.md](tests/README.md) for comprehensive testing documentation including:
+
 - Test structure and organization
 - Writing new tests
 - Mocking strategies
@@ -491,22 +525,26 @@ The project uses **GitHub Actions** for automated testing. The CI pipeline runs 
 **Pipeline Stages:**
 
 1. **Lint** (fast, parallel)
+
    - Code formatting checks (black, isort)
    - Linting with flake8
    - Syntax error detection
 
 2. **Unit Tests** (parallel, depends on lint)
+
    - All service tests run in parallel
    - Coverage reports generated (HTML, XML, terminal)
    - Artifacts uploaded for download
 
 3. **Integration Tests** (sequential, depends on unit tests)
+
    - Docker Compose starts RabbitMQ and Qdrant
    - Proper health checks with 60-second timeouts
    - Service logs displayed on failure
    - Cleanup with `docker compose down -v`
 
 4. **Docker Build** (parallel with integration)
+
    - All service images built and tested
    - Verifies images are functional
 
@@ -517,16 +555,19 @@ The project uses **GitHub Actions** for automated testing. The CI pipeline runs 
 **CI Configuration:** [.github/workflows/ci.yml](.github/workflows/ci.yml)
 
 **Trigger Conditions:**
+
 - Push to `main`, `develop`, `feature/**`, `hotfix/**` branches
 - Pull requests to `main` and `develop`
 
 **Viewing Results:**
+
 1. Go to GitHub repository → **Actions** tab
 2. Select latest workflow run
 3. View job results and logs
 4. Download coverage artifacts
 
 **Job Dependencies:**
+
 ```
 Lint (fast)
   ↓
@@ -546,12 +587,14 @@ All Dockerfiles have been optimized with **BuildKit cache mounts** for significa
 ### Enable BuildKit
 
 **Windows (PowerShell):**
+
 ```powershell
 .\scripts\enable-buildkit.ps1
 docker compose up --build
 ```
 
 **Linux/macOS:**
+
 ```bash
 export DOCKER_BUILDKIT=1
 export COMPOSE_DOCKER_CLI_BUILD=1
@@ -559,6 +602,7 @@ docker compose up --build
 ```
 
 **Make it permanent (Windows):**
+
 1. Press `Win + X` → System → Advanced system settings
 2. Environment Variables → New (User variables)
 3. Add: `DOCKER_BUILDKIT` = `1`
@@ -566,15 +610,16 @@ docker compose up --build
 
 ### Performance Improvements
 
-| Build Type | Before | After | Improvement |
-|------------|--------|-------|-------------|
-| First build | 10-15 min | 10-15 min | Same (needs to download) |
-| Rebuild (code change) | 10-15 min | **3-5 min** | **3-5x faster** |
-| Rebuild (no changes) | 8-10 min | **30 sec** | **16-20x faster** |
+| Build Type            | Before    | After       | Improvement              |
+| --------------------- | --------- | ----------- | ------------------------ |
+| First build           | 10-15 min | 10-15 min   | Same (needs to download) |
+| Rebuild (code change) | 10-15 min | **3-5 min** | **3-5x faster**          |
+| Rebuild (no changes)  | 8-10 min  | **30 sec**  | **16-20x faster**        |
 
 ### How It Works
 
 All Dockerfiles now use:
+
 ```dockerfile
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
@@ -587,6 +632,7 @@ This caches pip downloads between builds without increasing the final image size
 ## Troubleshooting
 
 ### Docker won't start
+
 ```bash
 docker compose logs rabbitmq
 docker compose logs qdrant
@@ -594,26 +640,31 @@ docker compose logs ingestion
 ```
 
 ### RabbitMQ connection failed
+
 1. Check status: `docker compose ps rabbitmq`
 2. View logs: `docker compose logs rabbitmq | grep "started"`
 3. Restart: `docker compose restart rabbitmq`
 
 ### Qdrant connection failed
+
 1. Check status: `docker compose ps qdrant`
 2. Test API: `curl http://localhost:6333/collections`
 3. Restart: `docker compose restart qdrant`
 
 ### No PDFs being downloaded
+
 1. Check logs: `docker compose logs ingestion`
 2. Check stats: Visit <http://localhost:8001/stats>
 3. Manually trigger: Visit <http://localhost:8001/docs> → `POST /ingest`
 
 ### Events not flowing through pipeline
+
 1. Check RabbitMQ queues: <http://localhost:15672> (guest/guest)
 2. Verify service health: <http://localhost:8001/health>
 3. Check worker logs: `docker compose logs extraction indexing`
 
 ### Tests failing locally
+
 1. Ensure dependencies installed: `pip install -r requirements-test.txt`
 2. Run from project root: `cd MARP-Guide-AI && pytest`
 3. For integration tests: `docker compose up -d rabbitmq qdrant`
@@ -623,37 +674,42 @@ docker compose logs ingestion
 ## Technology Stack
 
 ### Core Infrastructure
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| Docker | Latest | Containerization platform |
-| Docker Compose | Latest | Multi-container orchestration |
-| RabbitMQ | 3.12-management | Message broker |
-| Qdrant | Latest | Vector database |
+
+| Technology     | Version         | Purpose                       |
+| -------------- | --------------- | ----------------------------- |
+| Docker         | Latest          | Containerization platform     |
+| Docker Compose | Latest          | Multi-container orchestration |
+| RabbitMQ       | 3.12-management | Message broker                |
+| Qdrant         | Latest          | Vector database               |
 
 ### Python Services
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| Python | 3.11 | Programming language |
-| FastAPI | 0.104.1 | Web framework for REST APIs |
-| Uvicorn | 0.24.0 | ASGI server |
-| Pydantic | 2.0+ | Data validation |
-| Pika | 1.3.2 | RabbitMQ client |
+
+| Technology | Version | Purpose                     |
+| ---------- | ------- | --------------------------- |
+| Python     | 3.11    | Programming language        |
+| FastAPI    | 0.104.1 | Web framework for REST APIs |
+| Uvicorn    | 0.24.0  | ASGI server                 |
+| Pydantic   | 2.0+    | Data validation             |
+| Pika       | 1.3.2   | RabbitMQ client             |
 
 ### Data Processing
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| sentence-transformers | 3.0.0+ | Generate embeddings |
-| qdrant-client | 1.7.0 | Qdrant Python client |
-| pdfplumber | 0.10.3 | PDF text extraction |
-| BeautifulSoup4 | 4.12.2 | HTML parsing |
-| httpx | Latest | Async HTTP client |
+
+| Technology            | Version | Purpose              |
+| --------------------- | ------- | -------------------- |
+| sentence-transformers | 3.0.0+  | Generate embeddings  |
+| qdrant-client         | 1.7.0   | Qdrant Python client |
+| pdfplumber            | 0.10.3  | PDF text extraction  |
+| BeautifulSoup4        | 4.12.2  | HTML parsing         |
+| httpx                 | Latest  | Async HTTP client    |
 
 ### AI/ML Models
+
 - **Embedding Model**: `all-MiniLM-L6-v2` (384 dimensions, cosine similarity)
 - **LLM Provider**: OpenRouter
 - **LLM Model**: `google/gemma-3n-e2b-it:free` (Temperature: 0.7, Max Tokens: 500)
 
 ### Development Tools
+
 - **pytest**: Testing framework with coverage
 - **black**: Code formatter (line length: 127)
 - **isort**: Import sorter
