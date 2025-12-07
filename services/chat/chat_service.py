@@ -344,7 +344,10 @@ def compare_models(req: ChatRequest):
                                     citation_mapping[idx] = len(citations)
                                 elif citation_key in seen_citations:
                                     for old_idx, new_idx in citation_mapping.items():
-                                        if (chunks[old_idx - 1].get("title", ""), chunks[old_idx - 1].get("page", 0)) == citation_key:
+                                        if (
+                                            chunks[old_idx - 1].get("title", ""),
+                                            chunks[old_idx - 1].get("page", 0),
+                                        ) == citation_key:
                                             citation_mapping[idx] = new_idx
                                             break
 

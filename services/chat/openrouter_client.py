@@ -84,7 +84,7 @@ Reformulated query:"""
             reformulated = response.choices[0].message.content.strip()
 
             # Remove any quotes that the LLM might add
-            reformulated = reformulated.strip('"\'')
+            reformulated = reformulated.strip("\"'")
 
             logger.info(f"✅ Reformulated: {reformulated}")
 
