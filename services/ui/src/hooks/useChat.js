@@ -12,8 +12,16 @@ export function useChat() {
     return localStorage.getItem('selectedModel') || null
   })
   const [queryCount, setQueryCount] = useState(0)
+  const [showModelSelector, setShowModelSelector] = useState(false)
+  const [comparisonShown, setComparisonShown] = useState(() => {
+    // Track if comparison was already shown to avoid showing it again
+    return localStorage.getItem('comparisonShown') === 'true'
+  })
 
   const sendMessage = async (query) => {
+    // Close model selector if it's open
+    setShowModelSelector(false)
+
     const userMessage = { role: 'user', content: query }
     setMessages(prev => [...prev, userMessage])
     setIsLoading(true)
@@ -26,12 +34,14 @@ export function useChat() {
       setQueryCount(currentQueryCount)
 
       // First query: Use GPT-4o Mini by default (no comparison)
-      // Second query: Trigger comparison if no model selected yet
+      // Second query: Trigger comparison if comparison hasn't been shown yet
       // Third+ query: Use selected model
-      if (currentQueryCount === 2 && !selectedModel) {
+      if (currentQueryCount === 2 && !comparisonShown) {
         // Second query - trigger comparison
         const comparisonResult = await sendComparisonQuery(query)
         setComparisonData(comparisonResult)
+        setComparisonShown(true)
+        localStorage.setItem('comparisonShown', 'true')
         setIsLoading(false)
         // Don't add assistant message yet - wait for user to select model
         return
@@ -86,10 +96,27 @@ export function useChat() {
   }
 
   const resetModelSelection = () => {
+    // Clear current model selection and show selector
     setSelectedModel(null)
     localStorage.removeItem('selectedModel')
-    setMessages([])
-    setQueryCount(0)
+    setShowModelSelector(true)
+  }
+
+  const handleDirectModelSelection = (modelId) => {
+    // Handle model selection from the manual selector UI
+    setSelectedModel(modelId)
+    localStorage.setItem('selectedModel', modelId)
+    setShowModelSelector(false)
+    // Keep current query count so comparison can still trigger on 2nd query if needed
+  }
+
+  const cancelModelSelection = () => {
+    // User cancelled - restore previous selection if exists
+    const previousModel = localStorage.getItem('selectedModel')
+    if (previousModel) {
+      setSelectedModel(previousModel)
+    }
+    setShowModelSelector(false)
   }
 
   return {
@@ -98,8 +125,11 @@ export function useChat() {
     error,
     comparisonData,
     selectedModel,
+    showModelSelector,
     sendMessage,
     handleModelSelection,
+    handleDirectModelSelection,
+    cancelModelSelection,
     retryLastQuery,
     clearError,
     resetModelSelection
