@@ -227,8 +227,7 @@ def get_recent_queries(limit: int = Query(10, ge=1, le=100)):
 @app.post("/analytics/reset")
 def reset_analytics():
     """Reset all analytics data - clears all stored events"""
-    global query_events, response_events, feedback_events, citation_clicked_events, model_comparison_events, model_selected_events
-
+    # Clear all event lists (no global needed since we're calling methods, not reassigning)
     query_events.clear()
     response_events.clear()
     feedback_events.clear()
