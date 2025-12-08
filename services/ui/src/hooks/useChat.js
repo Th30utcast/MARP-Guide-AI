@@ -48,7 +48,7 @@ export function useChat() {
       }
 
       // Normal flow: use GPT-4o Mini (first query) or selected model (after selection)
-      const response = await sendChatQuery(query)
+      const response = await sendChatQuery(query, selectedModel)
       const assistantMessage = {
         role: 'assistant',
         content: response.answer,

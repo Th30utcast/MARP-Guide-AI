@@ -217,6 +217,34 @@ services:
       - marp-network
     restart: unless-stopped
 
+  # ============================================================================
+  # Analytics Service - User interaction event consumer and analytics API
+  # ============================================================================
+  analytics:
+    build:
+      context: .
+      dockerfile: services/analytics/Dockerfile
+    container_name: marp-analytics
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8005:8005"   # Expose Analytics API endpoint
+    networks:
+      - marp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8005/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
 # ============================================================================
 # Shared Resources
 # ============================================================================
