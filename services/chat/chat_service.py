@@ -236,13 +236,16 @@ def chat(req: ChatRequest):
                                     break
 
                 # Renumber citations in the answer to match deduplicated list
-                # Sort by citation number in descending order to avoid replacement conflicts
-                # (e.g., replacing [1] before [10] would corrupt [10])
+                # Use temporary placeholders to avoid conflicts during replacement
                 for old_num in sorted(cited_numbers, reverse=True):
                     if old_num in citation_mapping:
                         new_num = citation_mapping[old_num]
-                        # Replace all occurrences of [old_num] with [new_num]
-                        answer = answer.replace(f"[{old_num}]", f"[{new_num}]")
+                        # Replace with temporary placeholder to avoid conflicts
+                        answer = answer.replace(f"[{old_num}]", f"<<CITE_{new_num}>>")
+
+                # Now replace all placeholders with final citation numbers
+                for new_num in set(citation_mapping.values()):
+                    answer = answer.replace(f"<<CITE_{new_num}>>", f"[{new_num}]")
 
                 logger.info(f"Renumbered citations: {citation_mapping}")
 
@@ -257,10 +260,14 @@ def chat(req: ChatRequest):
                     for new_pos, old_pos in enumerate(sorted(final_cited_numbers), start=1):
                         final_mapping[old_pos] = new_pos
 
-                    # Replace citation numbers in descending order to avoid conflicts
+                    # Use placeholders again for conflict-free replacement
                     for old_pos in sorted(final_cited_numbers, reverse=True):
                         new_pos = final_mapping[old_pos]
-                        answer = answer.replace(f"[{old_pos}]", f"[{new_pos}]")
+                        answer = answer.replace(f"[{old_pos}]", f"<<FINAL_{new_pos}>>")
+
+                    # Replace all placeholders with final numbers
+                    for new_pos in final_mapping.values():
+                        answer = answer.replace(f"<<FINAL_{new_pos}>>", f"[{new_pos}]")
 
                     logger.info(f"Final renumbering to consecutive: {final_mapping}")
 
@@ -434,11 +441,15 @@ def compare_models(req: ChatRequest):
                                             citation_mapping[idx] = new_idx
                                             break
 
-                        # Renumber citations
+                        # Renumber citations using placeholders to avoid conflicts
                         for old_num in sorted(cited_numbers, reverse=True):
                             if old_num in citation_mapping:
                                 new_num = citation_mapping[old_num]
-                                answer = answer.replace(f"[{old_num}]", f"[{new_num}]")
+                                answer = answer.replace(f"[{old_num}]", f"<<CITE_{new_num}>>")
+
+                        # Replace placeholders with final citation numbers
+                        for new_num in set(citation_mapping.values()):
+                            answer = answer.replace(f"<<CITE_{new_num}>>", f"[{new_num}]")
 
                         # Filter to final citations
                         final_cited_numbers = set(int(match) for match in re.findall(r"\[(\d+)\]", answer))
@@ -450,9 +461,14 @@ def compare_models(req: ChatRequest):
                             for new_pos, old_pos in enumerate(sorted(final_cited_numbers), start=1):
                                 final_mapping[old_pos] = new_pos
 
+                            # Use placeholders for conflict-free replacement
                             for old_pos in sorted(final_cited_numbers, reverse=True):
                                 new_pos = final_mapping[old_pos]
-                                answer = answer.replace(f"[{old_pos}]", f"[{new_pos}]")
+                                answer = answer.replace(f"[{old_pos}]", f"<<FINAL_{new_pos}>>")
+
+                            # Replace placeholders with final numbers
+                            for new_pos in final_mapping.values():
+                                answer = answer.replace(f"<<FINAL_{new_pos}>>", f"[{new_pos}]")
 
                 logger.info(f"✅ {model_config['name']}: Generated answer with {len(citations)} citations")
                 return ModelComparisonResult(
