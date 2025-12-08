@@ -13,6 +13,9 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
+# Primary model ID for analytics
+PRIMARY_MODEL_ID = OPENROUTER_MODEL
+
 # RabbitMQ Configuration
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
