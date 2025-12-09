@@ -4,7 +4,7 @@ import Analytics from './components/Analytics'
 import Sidebar from './components/Sidebar'
 import Login from './components/Login'
 import Register from './components/Register'
-import { logout } from './api/authApi'
+import { logout, validateSession } from './api/authApi'
 import { resetAnalytics } from './api/analyticsApi'
 import lancasterLogo from '/LancasterLogo.png'
 
@@ -15,16 +15,38 @@ function App() {
     const [authError, setAuthError] = useState(null)
     const [currentPage, setCurrentPage] = useState('chat')
 
-    // Check for existing session on mount
+    // Check for existing session on mount and validate with backend
     useEffect(() => {
-      const token = localStorage.getItem('session_token')
-      const userEmail = localStorage.getItem('user_email')
-      const userId = localStorage.getItem('user_id')
+      const validateExistingSession = async () => {
+        const token = localStorage.getItem('session_token')
+        const userEmail = localStorage.getItem('user_email')
+        const userId = localStorage.getItem('user_id')
 
-      if (token && userEmail && userId) {
-        setIsAuthenticated(true)
-        setUser({ email: userEmail, user_id: userId })
+        if (token && userEmail && userId) {
+          try {
+            // Validate session with backend
+            const validationResult = await validateSession(token)
+
+            // Session is valid
+            setIsAuthenticated(true)
+            setUser({ email: validationResult.email, user_id: validationResult.user_id })
+          } catch (error) {
+            // Session invalid or expired - clear localStorage
+            console.log('Session validation failed, clearing stored credentials')
+            localStorage.removeItem('session_token')
+            localStorage.removeItem('user_email')
+            localStorage.removeItem('user_id')
+            localStorage.removeItem('selectedModel')
+            localStorage.removeItem('comparisonShown')
+            localStorage.removeItem('chatMessages')
+            localStorage.removeItem('queryCount')
+            setIsAuthenticated(false)
+            setUser(null)
+          }
+        }
       }
+
+      validateExistingSession()
     }, [])
 
     const handleLogin = (response) => {

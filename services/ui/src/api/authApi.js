@@ -80,3 +80,27 @@ export async function logout(token) {
   }
 }
 
+export async function validateSession(token) {
+  try {
+    const response = await axios.get(
+      `${AUTH_API_URL}/validate`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: TIMEOUT
+      }
+    )
+    return response.data
+  } catch (error) {
+    if (error.code === 'ECONNABORTED') {
+      throw new AuthApiError('Request timeout. Please try again.', 408)
+    }
+    if (!error.response) {
+      throw new AuthApiError('Network error. Check your connection.', 0)
+    }
+    throw new AuthApiError(
+      error.response.data?.detail || 'Session validation failed',
+      error.response.status
+    )
+  }
+}
+
