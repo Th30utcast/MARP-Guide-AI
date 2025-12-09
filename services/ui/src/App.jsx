@@ -1,14 +1,14 @@
-  import { useState, useEffect } from 'react'
-  import ChatContainer from './components/ChatContainer'
-  import Analytics from './components/Analytics'
-  import Sidebar from './components/Sidebar'
-  import Login from './components/Login'
-  import Register from './components/Register'
-  import { logout } from './api/authApi'
-  import { resetAnalytics } from './api/analyticsApi'
-  import lancasterLogo from '/LancasterLogo.png'
+import { useState, useEffect } from 'react'
+import ChatContainer from './components/ChatContainer'
+import Analytics from './components/Analytics'
+import Sidebar from './components/Sidebar'
+import Login from './components/Login'
+import Register from './components/Register'
+import { logout } from './api/authApi'
+import { resetAnalytics } from './api/analyticsApi'
+import lancasterLogo from '/LancasterLogo.png'
 
-  function App() {
+function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [showRegister, setShowRegister] = useState(false)
     const [user, setUser] = useState(null)
@@ -51,26 +51,35 @@
       } catch (err) {
         console.error('Logout error:', err)
       } finally {
+        // Clear auth data
         localStorage.removeItem('session_token')
         localStorage.removeItem('user_email')
         localStorage.removeItem('user_id')
+        // Clear chat data for user isolation
+        localStorage.removeItem('selectedModel')
+        localStorage.removeItem('comparisonShown')
+        localStorage.removeItem('chatMessages')
+        localStorage.removeItem('queryCount')
         setIsAuthenticated(false)
         setUser(null)
       }
     }
 
     const handleReset = async () => {
-      if (confirm('Are you sure you want to reset everything? This will clear all chat messages, model selection, and analytics
-   data.')) {
+      if (confirm('Are you sure you want to reset everything? This will clear all chat messages, model selection, and analytics data.')) {
         try {
           await resetAnalytics()
           localStorage.removeItem('selectedModel')
           localStorage.removeItem('comparisonShown')
+          localStorage.removeItem('chatMessages')
+          localStorage.removeItem('queryCount')
           window.location.reload()
         } catch (error) {
           console.error('Error during reset:', error)
           localStorage.removeItem('selectedModel')
           localStorage.removeItem('comparisonShown')
+          localStorage.removeItem('chatMessages')
+          localStorage.removeItem('queryCount')
           window.location.reload()
         }
       }
@@ -122,6 +131,6 @@
         </div>
       </div>
     )
-  }
+}
 
-  export default App
+export default App

@@ -17,11 +17,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
 
 import config
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends
 from openrouter_client import OpenRouterClient
 from prompt_templates import create_rag_prompt
 from pydantic import BaseModel, Field
 from retrieval_client import RetrievalClient
+import redis
 
 # Add common module to path for event publishing
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
@@ -39,6 +40,13 @@ app = FastAPI(title="Chat Service", version="1.0.0")
 retrieval_client = RetrievalClient()
 openrouter_client = OpenRouterClient()
 
+# Initialize Redis client for session validation
+redis_client = redis.Redis(
+    host=config.REDIS_HOST,
+    port=config.REDIS_PORT,
+    decode_responses=True
+)
+
 # Initialize event broker for analytics
 try:
     event_broker = RabbitMQEventBroker(
@@ -51,6 +59,38 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Failed to initialize event broker: {e}. Analytics events will not be published.")
     event_broker = None
+
+# Session validation dependency
+def validate_session(authorization: Optional[str] = Header(None)) -> Dict:
+    """
+    Validates user session from Authorization header
+    Returns dict with user_id and email
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header required")
+
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization format")
+
+    token = authorization.replace("Bearer ", "")
+
+    try:
+        # Validate session token in Redis
+        session_data = redis_client.get(f"session:{token}")
+        if not session_data:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+        # Parse session data
+        session = json.loads(session_data)
+        return {
+            "user_id": session.get("user_id"),
+            "email": session.get("email")
+        }
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=500, detail="Session data corrupted")
+    except Exception as e:
+        logger.error(f"Session validation error: {e}")
+        raise HTTPException(status_code=500, detail="Session validation failed")
 
 # Schemas:
 
@@ -106,12 +146,16 @@ def health():
 
 # Chat endpoint: POST endpoint that accepts ChatRequest, records start time, and begins the RAG pipeline.
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, user: Dict = Depends(validate_session)):
     """
-    RAG-powered chat endpoint
+    RAG-powered chat endpoint (requires authentication)
     Steps: 1. Retrieval → 2. Augmentation → 3. Generation → 4. Citation
     """
     start_time = time.time()
+
+    # Get user_id from validated session
+    user_id = user["user_id"]
+    logger.info(f"📝 Chat request from user {user_id}")
 
     # Generate session ID if not provided
     session_id = req.session_id or events.generate_event_id()
@@ -317,12 +361,16 @@ def chat(req: ChatRequest):
 
 # Multi-Model Comparison endpoint (Tier 2-D)
 @app.post("/chat/compare", response_model=ComparisonResponse)
-def compare_models(req: ChatRequest):
+def compare_models(req: ChatRequest, user: Dict = Depends(validate_session)):
     """
-    Multi-model comparison endpoint
+    Multi-model comparison endpoint (requires authentication)
     Generates answers from 3 free models in parallel for user selection
     """
     start_time = time.time()
+
+    # Get user_id from validated session
+    user_id = user["user_id"]
+    logger.info(f"📊 Model comparison request from user {user_id}")
 
     # Generate session ID if not provided
     session_id = req.session_id or events.generate_event_id()
