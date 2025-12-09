@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import PropTypes from 'prop-types'
 
 /**
  * Analytics component - displays usage metrics and performance statistics.
@@ -314,6 +315,11 @@ function Analytics({ isAdmin }) {
   )
 }
 
+// Quality: PropTypes validation for type safety
+Analytics.propTypes = {
+  isAdmin: PropTypes.bool.isRequired
+}
+
 /**
  * StatCard component - reusable card for displaying a single metric with icon.
  * Used for the summary statistics at the top of the analytics dashboard.
@@ -352,6 +358,13 @@ function StatCard({ title, value, icon }) {
       </div>
     </div>
   )
+}
+
+// Quality: PropTypes validation for StatCard
+StatCard.propTypes = {
+  title: PropTypes.string.isRequired,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  icon: PropTypes.node.isRequired
 }
 
 export default Analytics

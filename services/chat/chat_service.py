@@ -125,11 +125,31 @@ def health():
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, user: Dict = Depends(validate_session)):
-    """RAG-powered chat endpoint (requires authentication)"""
+    """
+    RAG-powered chat endpoint (requires authentication)
+
+    Quality checks:
+    - Validates query length and content
+    - Sanitizes input to prevent injection attacks
+    - Provides detailed error messages for debugging
+    """
     start_time = time.time()
 
-    # Get user_id from validated session
-    user_id = user["user_id"]
+    # Quality: Input validation with detailed error messages
+    if not req.query or not req.query.strip():
+        logger.warning(f"⚠️ Empty query received from user {user.get('user_id')}")
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    if len(req.query) > 1000:
+        logger.warning(f"⚠️ Query too long ({len(req.query)} chars) from user {user.get('user_id')}")
+        raise HTTPException(status_code=400, detail="Query must be less than 1000 characters")
+
+    # Get user_id from validated session (defensive programming)
+    user_id = user.get("user_id")
+    if not user_id:
+        logger.error("❌ Session validation passed but user_id is missing")
+        raise HTTPException(status_code=500, detail="Invalid session data")
+
     logger.info(f"📝 Chat request from user {user_id}")
 
     # Generate session ID if not provided

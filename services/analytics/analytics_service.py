@@ -155,7 +155,19 @@ def get_summary(
     user_id: Optional[str] = Query(None, description="User ID for filtering"),
     authorization: Optional[str] = Header(None),
 ):
-    """Get analytics summary (admins see all data, users see only their own)"""
+    """
+    Get analytics summary (admins see all data, users see only their own)
+
+    Quality improvements:
+    - Validates authorization header
+    - Provides clear error messages
+    - Defensive programming with safe data access
+    """
+    # Quality: Validate authentication
+    if not authorization:
+        logger.warning("⚠️ Analytics summary request without authorization")
+        raise HTTPException(status_code=401, detail="Authorization header required")
+
     is_admin = check_if_admin(authorization)
 
     if is_admin:
@@ -163,13 +175,20 @@ def get_summary(
         user_response_events = response_events
         user_feedback_events = feedback_events
         user_comparison_events = model_comparison_events
+        logger.info(f"📊 Admin viewing global analytics ({len(query_events)} total queries)")
     else:
+        # Quality: Better error message for missing user_id
         if not user_id:
-            raise HTTPException(status_code=400, detail="user_id is required for non-admin users")
-        user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
-        user_response_events = [e for e in response_events if e["payload"].get("userId") == user_id]
-        user_feedback_events = [e for e in feedback_events if e["payload"].get("userId") == user_id]
-        user_comparison_events = [e for e in model_comparison_events if e["payload"].get("userId") == user_id]
+            logger.warning("⚠️ Non-admin user attempted to access analytics without user_id")
+            raise HTTPException(
+                status_code=400, detail="user_id parameter is required for non-admin users to view their personal analytics"
+            )
+        # Quality: Defensive filtering with safe dict access
+        user_query_events = [e for e in query_events if e.get("payload", {}).get("userId") == user_id]
+        user_response_events = [e for e in response_events if e.get("payload", {}).get("userId") == user_id]
+        user_feedback_events = [e for e in feedback_events if e.get("payload", {}).get("userId") == user_id]
+        user_comparison_events = [e for e in model_comparison_events if e.get("payload", {}).get("userId") == user_id]
+        logger.info(f"📊 User {user_id} viewing personal analytics ({len(user_query_events)} queries)")
 
     total_queries = len(user_query_events)
     total_responses = len(user_response_events)
@@ -179,9 +198,14 @@ def get_summary(
     avg_latency = 0.0
     avg_citations = 0.0
 
+    # Quality: Safe calculation with error handling
     if total_responses > 0:
-        avg_latency = sum(e["payload"]["latencyMs"] for e in user_response_events) / total_responses
-        avg_citations = sum(e["payload"]["citationCount"] for e in user_response_events) / total_responses
+        try:
+            avg_latency = sum(e.get("payload", {}).get("latencyMs", 0) for e in user_response_events) / total_responses
+            avg_citations = sum(e.get("payload", {}).get("citationCount", 0) for e in user_response_events) / total_responses
+        except (KeyError, TypeError, ZeroDivisionError) as e:
+            logger.error(f"❌ Error calculating averages: {e}")
+            # Continue with defaults (0.0) rather than failing
 
     return AnalyticsSummary(
         total_queries=total_queries,

@@ -185,7 +185,24 @@ def generate_session_token() -> str:
 
 @app.post("/auth/register", response_model=RegisterResponse)
 def register(request: RegisterRequest):
-    """Register a new user"""
+    """
+    Register a new user
+
+    Quality improvements:
+    - Validates email format (via Pydantic)
+    - Enforces password minimum length (via Pydantic Field)
+    - Clear error messages for debugging
+    - Proper resource cleanup
+    """
+    # Quality: Additional validation beyond Pydantic
+    if len(request.password.strip()) < 8:
+        logger.warning(f"⚠️ Registration attempt with weak password for {request.email}")
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+
+    if "@" not in request.email or "." not in request.email.split("@")[-1]:
+        logger.warning(f"⚠️ Registration attempt with invalid email format: {request.email}")
+        raise HTTPException(status_code=400, detail="Invalid email format")
+
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -195,7 +212,10 @@ def register(request: RegisterRequest):
         if cur.fetchone():
             cur.close()
             conn.close()
-            raise HTTPException(status_code=400, detail="Email already registered")
+            logger.warning(f"⚠️ Registration attempt with existing email: {request.email}")
+            raise HTTPException(
+                status_code=400, detail="Email already registered. Please use a different email or try logging in."
+            )
 
         # Hash password and create user
         password_hash = hash_password(request.password)
@@ -203,19 +223,25 @@ def register(request: RegisterRequest):
             "INSERT INTO users (email, password_hash) VALUES (%s, %s) RETURNING user_id",
             (request.email, password_hash),
         )
-        user_id = str(cur.fetchone()[0])
+        result = cur.fetchone()
+
+        # Quality: Defensive programming - check result exists
+        if not result:
+            raise Exception("Failed to create user record")
+
+        user_id = str(result[0])
 
         conn.commit()
         cur.close()
         conn.close()
 
-        logger.info(f"✅ User registered: {request.email}")
+        logger.info(f"✅ User registered successfully: {request.email} (ID: {user_id})")
         return RegisterResponse(user_id=user_id, email=request.email, message="Registration successful")
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Registration error: {e}")
-        raise HTTPException(status_code=500, detail="Registration failed")
+        logger.error(f"❌ Registration error for {request.email}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 
 @app.post("/auth/login", response_model=LoginResponse)
