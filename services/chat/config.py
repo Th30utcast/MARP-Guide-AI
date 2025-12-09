@@ -20,6 +20,10 @@ RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
 
+# Redis Configuration (for session validation)
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+
 # RAG Configuration
 DEFAULT_TOP_K = 10
 MAX_CONTEXT_TOKENS = 3500  # More context for comprehensive answers

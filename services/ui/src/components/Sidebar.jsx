@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function Sidebar({ currentPage, onPageChange, onReset }) {
+function Sidebar({ currentPage, onPageChange, onReset, onLogout, user }) {
   const [isHovered, setIsHovered] = useState(null)
 
   const menuItems = [
@@ -82,7 +82,7 @@ function Sidebar({ currentPage, onPageChange, onReset }) {
       </nav>
 
       {/* Reset Button */}
-      <div className="p-4 border-t" style={{ borderColor: 'var(--lancaster-border)' }}>
+      <div className="p-4 border-t space-y-2" style={{ borderColor: 'var(--lancaster-border)' }}>
         <button
           onClick={onReset}
           onMouseEnter={() => setIsHovered('reset')}
@@ -98,6 +98,32 @@ function Sidebar({ currentPage, onPageChange, onReset }) {
           </svg>
           <span className="font-medium">Reset Chat</span>
         </button>
+
+        {/* User Info & Logout */}
+        {user && (
+          <div className="pt-2">
+            <div className="px-4 py-2">
+              <p className="text-xs font-semibold truncate" style={{ color: 'var(--lancaster-text-primary)' }}>
+                {user.email}
+              </p>
+            </div>
+            <button
+              onClick={onLogout}
+              onMouseEnter={() => setIsHovered('logout')}
+              onMouseLeave={() => setIsHovered(null)}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left"
+              style={{
+                backgroundColor: isHovered === 'logout' ? 'var(--lancaster-bg)' : 'transparent',
+                color: 'var(--lancaster-red)'
+              }}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span className="font-medium">Logout</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

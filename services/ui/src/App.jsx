@@ -1,54 +1,162 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ChatContainer from './components/ChatContainer'
 import Analytics from './components/Analytics'
 import Sidebar from './components/Sidebar'
+import Login from './components/Login'
+import Register from './components/Register'
+import { logout, validateSession } from './api/authApi'
 import { resetAnalytics } from './api/analyticsApi'
+import lancasterLogo from '/LancasterLogo.png'
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('chat')
+    const [isAuthenticated, setIsAuthenticated] = useState(false)
+    const [showRegister, setShowRegister] = useState(false)
+    const [user, setUser] = useState(null)
+    const [isAdmin, setIsAdmin] = useState(false)
+    const [authError, setAuthError] = useState(null)
+    const [currentPage, setCurrentPage] = useState('chat')
 
-  const handleReset = async () => {
-    if (confirm('Are you sure you want to reset everything? This will clear all chat messages, model selection, and analytics data.')) {
+    // Check for existing session on mount and validate with backend
+    useEffect(() => {
+      const validateExistingSession = async () => {
+        const token = localStorage.getItem('session_token')
+        const userEmail = localStorage.getItem('user_email')
+        const userId = localStorage.getItem('user_id')
+
+        if (token && userEmail && userId) {
+          try {
+            // Validate session with backend
+            const validationResult = await validateSession(token)
+
+            // Session is valid
+            setIsAuthenticated(true)
+            setUser({ email: validationResult.email, user_id: validationResult.user_id })
+            setIsAdmin(validationResult.is_admin || false)
+          } catch (error) {
+            // Session invalid or expired - clear localStorage
+            console.log('Session validation failed, clearing stored credentials')
+            localStorage.removeItem('session_token')
+            localStorage.removeItem('user_email')
+            localStorage.removeItem('user_id')
+            localStorage.removeItem('selectedModel')
+            localStorage.removeItem('comparisonShown')
+            localStorage.removeItem('chatMessages')
+            localStorage.removeItem('queryCount')
+            setIsAuthenticated(false)
+            setUser(null)
+          }
+        }
+      }
+
+      validateExistingSession()
+    }, [])
+
+    const handleLogin = (response) => {
+      localStorage.setItem('session_token', response.session_token)
+      localStorage.setItem('user_email', response.email)
+      localStorage.setItem('user_id', response.user_id)
+      setIsAuthenticated(true)
+      setUser({ email: response.email, user_id: response.user_id })
+      setIsAdmin(response.is_admin || false)
+      setAuthError(null)
+    }
+
+    const handleRegister = (response) => {
+      setAuthError(null)
+      setShowRegister(false)
+      alert('Registration successful! Please sign in with your credentials.')
+    }
+
+    const handleLogout = async () => {
       try {
-        // Clear backend analytics data
-        await resetAnalytics()
-
-        // Clear localStorage
+        const token = localStorage.getItem('session_token')
+        if (token) {
+          await logout(token)
+        }
+      } catch (err) {
+        console.error('Logout error:', err)
+      } finally {
+        // Clear auth data
+        localStorage.removeItem('session_token')
+        localStorage.removeItem('user_email')
+        localStorage.removeItem('user_id')
+        // Clear chat data for user isolation
         localStorage.removeItem('selectedModel')
         localStorage.removeItem('comparisonShown')
-
-        // Reload the page to reset state
-        window.location.reload()
-      } catch (error) {
-        console.error('Error during reset:', error)
-        // Still reload even if analytics reset fails
-        localStorage.removeItem('selectedModel')
-        localStorage.removeItem('comparisonShown')
-        window.location.reload()
+        localStorage.removeItem('chatMessages')
+        localStorage.removeItem('queryCount')
+        setIsAuthenticated(false)
+        setUser(null)
+        setIsAdmin(false)
       }
     }
-  }
 
-  return (
-    <div className="h-screen flex" style={{ backgroundColor: 'var(--lancaster-bg)' }}>
-      {/* Sidebar */}
-      <Sidebar
-        currentPage={currentPage}
-        onPageChange={setCurrentPage}
-        onReset={handleReset}
-      />
+    const handleReset = async () => {
+      if (confirm('Are you sure you want to reset everything? This will clear all chat messages, model selection, and analytics data.')) {
+        try {
+          await resetAnalytics()
+          localStorage.removeItem('selectedModel')
+          localStorage.removeItem('comparisonShown')
+          localStorage.removeItem('chatMessages')
+          localStorage.removeItem('queryCount')
+          window.location.reload()
+        } catch (error) {
+          console.error('Error during reset:', error)
+          localStorage.removeItem('selectedModel')
+          localStorage.removeItem('comparisonShown')
+          localStorage.removeItem('chatMessages')
+          localStorage.removeItem('queryCount')
+          window.location.reload()
+        }
+      }
+    }
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div
-          className="flex-1 overflow-hidden"
-          style={{ backgroundColor: 'var(--lancaster-bg)' }}
-        >
-          {currentPage === 'chat' ? <ChatContainer /> : <Analytics />}
+    // Show login/register if not authenticated
+    if (!isAuthenticated) {
+      return showRegister ? (
+        <Register
+          onRegister={handleRegister}
+          onSwitchToLogin={() => {
+            setShowRegister(false)
+            setAuthError(null)
+          }}
+          error={authError}
+          setError={setAuthError}
+        />
+      ) : (
+        <Login
+          onLogin={handleLogin}
+          onSwitchToRegister={() => {
+            setShowRegister(true)
+            setAuthError(null)
+          }}
+          error={authError}
+          setError={setAuthError}
+        />
+      )
+    }
+
+    // Show main app if authenticated
+    return (
+      <div className="h-screen flex" style={{ backgroundColor: 'var(--lancaster-bg)' }}>
+        <Sidebar
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+          onReset={handleReset}
+          onLogout={handleLogout}
+          user={user}
+        />
+
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div
+            className="flex-1 overflow-hidden"
+            style={{ backgroundColor: 'var(--lancaster-bg)' }}
+          >
+            {currentPage === 'chat' ? <ChatContainer /> : <Analytics isAdmin={isAdmin} />}
+          </div>
         </div>
       </div>
-    </div>
-  )
+    )
 }
 
 export default App

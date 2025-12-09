@@ -17,10 +17,21 @@ export async function sendChatQuery(query, modelId = null) {
     if (modelId) {
       payload.model_id = modelId
     }
+
+    // Get session token for authentication
+    const token = localStorage.getItem('session_token')
+    const headers = {}
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
     const response = await axios.post(
       CHAT_API_URL,
       payload,
-      { timeout: TIMEOUT }
+      {
+        timeout: TIMEOUT,
+        headers
+      }
     )
     return response.data
   } catch (error) {
@@ -42,10 +53,20 @@ export async function sendChatQuery(query, modelId = null) {
 
 export async function sendComparisonQuery(query) {
   try {
+    // Get session token for authentication
+    const token = localStorage.getItem('session_token')
+    const headers = {}
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
     const response = await axios.post(
       '/api/chat/compare',
       { query },
-      { timeout: 60000 } // 60 second timeout for parallel generation
+      {
+        timeout: 60000, // 60 second timeout for parallel generation
+        headers
+      }
     )
     return response.data
   } catch (error) {

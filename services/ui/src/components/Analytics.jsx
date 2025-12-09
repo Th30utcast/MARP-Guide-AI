@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-function Analytics() {
+function Analytics({ isAdmin }) {
   const [summary, setSummary] = useState(null)
   const [recentQueries, setRecentQueries] = useState([])
   const [popularQueries, setPopularQueries] = useState([])
@@ -13,16 +13,35 @@ function Analytics() {
     // Refresh every 30 seconds
     const interval = setInterval(fetchAnalytics, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [isAdmin])
 
   const fetchAnalytics = async () => {
     try {
       setLoading(true)
+
+      // Get session token and user_id from localStorage
+      const sessionToken = localStorage.getItem('session_token')
+      const userId = localStorage.getItem('user_id')
+
+      if (!sessionToken) {
+        setError('User not authenticated')
+        setLoading(false)
+        return
+      }
+
+      // Prepare headers with authorization
+      const headers = {
+        'Authorization': `Bearer ${sessionToken}`
+      }
+
+      // For admin, don't pass user_id; for regular users, pass user_id
+      const userIdParam = isAdmin ? '' : `user_id=${userId}`
+
       const [summaryRes, recentRes, popularRes, statsRes] = await Promise.all([
-        fetch('/api/analytics/summary'),
-        fetch('/api/analytics/recent-queries?limit=10'),
-        fetch('/api/analytics/popular-queries?limit=5'),
-        fetch('/api/analytics/model-stats')
+        fetch(`/api/analytics/summary?${userIdParam}`, { headers }),
+        fetch(`/api/analytics/recent-queries?${userIdParam}&limit=10`, { headers }),
+        fetch(`/api/analytics/popular-queries?${userIdParam}&limit=5`, { headers }),
+        fetch(`/api/analytics/model-stats?${userIdParam}`, { headers })
       ])
 
       setSummary(await summaryRes.json())
@@ -76,11 +95,24 @@ function Analytics() {
     <div className="h-full overflow-y-auto p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--lancaster-text-primary)' }}>
-          Analytics Dashboard
-        </h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--lancaster-text-primary)' }}>
+            Analytics Dashboard
+          </h1>
+          {isAdmin && (
+            <span
+              className="px-3 py-1 rounded-full text-xs font-semibold"
+              style={{
+                backgroundColor: 'var(--lancaster-red)',
+                color: 'var(--lancaster-white)'
+              }}
+            >
+              ADMIN VIEW - ALL USERS
+            </span>
+          )}
+        </div>
         <p style={{ color: 'var(--lancaster-text-secondary)' }}>
-          User interaction metrics and model performance
+          {isAdmin ? 'Global analytics across all users' : 'Your personal interaction metrics and model performance'}
         </p>
       </div>
 

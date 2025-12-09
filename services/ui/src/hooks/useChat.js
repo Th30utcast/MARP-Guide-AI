@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { sendChatQuery, sendComparisonQuery } from '../api/chatApi'
 
 export function useChat() {
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState(() => {
+    // Load messages from localStorage if exists
+    const saved = localStorage.getItem('chatMessages')
+    return saved ? JSON.parse(saved) : []
+  })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [lastQuery, setLastQuery] = useState('')
@@ -11,7 +15,11 @@ export function useChat() {
     // Load from localStorage if exists
     return localStorage.getItem('selectedModel') || null
   })
-  const [queryCount, setQueryCount] = useState(0)
+  const [queryCount, setQueryCount] = useState(() => {
+    // Load query count from localStorage
+    const saved = localStorage.getItem('queryCount')
+    return saved ? parseInt(saved) : 0
+  })
   const [showModelSelector, setShowModelSelector] = useState(false)
   const [comparisonShown, setComparisonShown] = useState(() => {
     // Track if comparison was already shown to avoid showing it again
@@ -23,7 +31,10 @@ export function useChat() {
     setShowModelSelector(false)
 
     const userMessage = { role: 'user', content: query }
-    setMessages(prev => [...prev, userMessage])
+    const newMessages = [...messages, userMessage]
+    setMessages(newMessages)
+    localStorage.setItem('chatMessages', JSON.stringify(newMessages))
+
     setIsLoading(true)
     setError(null)
     setLastQuery(query)
@@ -32,6 +43,7 @@ export function useChat() {
       // Count how many user queries have been sent
       const currentQueryCount = queryCount + 1
       setQueryCount(currentQueryCount)
+      localStorage.setItem('queryCount', currentQueryCount.toString())
 
       // First query: Use GPT-4o Mini by default (no comparison)
       // Second query: Trigger comparison if comparison hasn't been shown yet
@@ -40,8 +52,7 @@ export function useChat() {
         // Second query - trigger comparison
         const comparisonResult = await sendComparisonQuery(query)
         setComparisonData(comparisonResult)
-        setComparisonShown(true)
-        localStorage.setItem('comparisonShown', 'true')
+        // Don't mark as shown yet - only when they select a model
         setIsLoading(false)
         // Don't add assistant message yet - wait for user to select model
         return
@@ -54,7 +65,9 @@ export function useChat() {
         content: response.answer,
         citations: response.citations || []
       }
-      setMessages(prev => [...prev, assistantMessage])
+      const updatedMessages = [...newMessages, assistantMessage]
+      setMessages(updatedMessages)
+      localStorage.setItem('chatMessages', JSON.stringify(updatedMessages))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -67,6 +80,10 @@ export function useChat() {
     setSelectedModel(modelId)
     localStorage.setItem('selectedModel', modelId)
 
+    // Mark comparison as shown only after user selects a model
+    setComparisonShown(true)
+    localStorage.setItem('comparisonShown', 'true')
+
     // Find the selected model's answer from comparison data
     const selectedResult = comparisonData.results.find(r => r.model_id === modelId)
 
@@ -78,7 +95,9 @@ export function useChat() {
         citations: selectedResult.citations || [],
         modelName: selectedResult.model_name
       }
-      setMessages(prev => [...prev, assistantMessage])
+      const updatedMessages = [...messages, assistantMessage]
+      setMessages(updatedMessages)
+      localStorage.setItem('chatMessages', JSON.stringify(updatedMessages))
     }
 
     // Clear comparison data
