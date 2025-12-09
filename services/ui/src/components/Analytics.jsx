@@ -18,11 +18,20 @@ function Analytics() {
   const fetchAnalytics = async () => {
     try {
       setLoading(true)
+
+      // Get user_id from localStorage
+      const userId = localStorage.getItem('user_id')
+      if (!userId) {
+        setError('User not authenticated')
+        setLoading(false)
+        return
+      }
+
       const [summaryRes, recentRes, popularRes, statsRes] = await Promise.all([
-        fetch('/api/analytics/summary'),
-        fetch('/api/analytics/recent-queries?limit=10'),
-        fetch('/api/analytics/popular-queries?limit=5'),
-        fetch('/api/analytics/model-stats')
+        fetch(`/api/analytics/summary?user_id=${userId}`),
+        fetch(`/api/analytics/recent-queries?user_id=${userId}&limit=10`),
+        fetch(`/api/analytics/popular-queries?user_id=${userId}&limit=5`),
+        fetch(`/api/analytics/model-stats?user_id=${userId}`)
       ])
 
       setSummary(await summaryRes.json())

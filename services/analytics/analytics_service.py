@@ -140,20 +140,26 @@ def health():
 
 
 @app.get("/analytics/summary", response_model=AnalyticsSummary)
-def get_summary():
-    """Get overall analytics summary"""
-    total_queries = len(query_events)
-    total_responses = len(response_events)
-    total_feedback = len(feedback_events)
-    total_comparisons = len(model_comparison_events)
+def get_summary(user_id: str = Query(..., description="User ID for filtering analytics")):
+    """Get analytics summary for a specific user"""
+    # Filter events by user_id
+    user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
+    user_response_events = [e for e in response_events if e["payload"].get("userId") == user_id]
+    user_feedback_events = [e for e in feedback_events if e["payload"].get("userId") == user_id]
+    user_comparison_events = [e for e in model_comparison_events if e["payload"].get("userId") == user_id]
+
+    total_queries = len(user_query_events)
+    total_responses = len(user_response_events)
+    total_feedback = len(user_feedback_events)
+    total_comparisons = len(user_comparison_events)
 
     # Calculate averages
     avg_latency = 0.0
     avg_citations = 0.0
 
     if total_responses > 0:
-        avg_latency = sum(e["payload"]["latencyMs"] for e in response_events) / total_responses
-        avg_citations = sum(e["payload"]["citationCount"] for e in response_events) / total_responses
+        avg_latency = sum(e["payload"]["latencyMs"] for e in user_response_events) / total_responses
+        avg_citations = sum(e["payload"]["citationCount"] for e in user_response_events) / total_responses
 
     return AnalyticsSummary(
         total_queries=total_queries,
@@ -166,11 +172,14 @@ def get_summary():
 
 
 @app.get("/analytics/popular-queries", response_model=List[PopularQuery])
-def get_popular_queries(limit: int = Query(10, ge=1, le=100)):
-    """Get most popular queries"""
+def get_popular_queries(user_id: str = Query(..., description="User ID for filtering"), limit: int = Query(10, ge=1, le=100)):
+    """Get most popular queries for a specific user"""
     query_counts = {}
 
-    for event in query_events:
+    # Filter by user_id
+    user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
+
+    for event in user_query_events:
         query = event["payload"]["query"]
         query_counts[query] = query_counts.get(query, 0) + 1
 
@@ -181,11 +190,14 @@ def get_popular_queries(limit: int = Query(10, ge=1, le=100)):
 
 
 @app.get("/analytics/model-stats", response_model=List[ModelStats])
-def get_model_stats():
-    """Get statistics for each model"""
+def get_model_stats(user_id: str = Query(..., description="User ID for filtering")):
+    """Get statistics for each model for a specific user"""
     model_data = {}
 
-    for event in response_events:
+    # Filter by user_id
+    user_response_events = [e for e in response_events if e["payload"].get("userId") == user_id]
+
+    for event in user_response_events:
         model_id = event["payload"]["modelId"]
         if model_id not in model_data:
             model_data[model_id] = {"queries": 0, "total_latency": 0, "total_citations": 0}
@@ -210,9 +222,11 @@ def get_model_stats():
 
 
 @app.get("/analytics/recent-queries")
-def get_recent_queries(limit: int = Query(10, ge=1, le=100)):
-    """Get recent queries"""
-    recent = query_events[-limit:][::-1]  # Last N in reverse order
+def get_recent_queries(user_id: str = Query(..., description="User ID for filtering"), limit: int = Query(10, ge=1, le=100)):
+    """Get recent queries for a specific user"""
+    # Filter by user_id
+    user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
+    recent = user_query_events[-limit:][::-1]  # Last N in reverse order
     return [
         {
             "query": e["payload"]["query"],

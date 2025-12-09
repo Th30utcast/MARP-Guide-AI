@@ -62,7 +62,7 @@ This will start:
    - Email: `test@lancaster.ac.uk`
    - Password: `testpassword123`
 2. **Click "Sign In"**
-3. **Expected**: 
+3. **Expected**:
    - Redirected to main chat interface
    - Your email appears in the header
    - "Logout" button visible in header
@@ -79,7 +79,7 @@ This will start:
 ### Test 4: Logout Flow
 
 1. **While logged in**, click "Logout" button in header
-2. **Expected**: 
+2. **Expected**:
    - Redirected to login page
    - Session token removed
    - Cannot access chat without logging in again
@@ -274,4 +274,3 @@ docker compose exec redis redis-cli PING
 - Sessions expire after 24 hours
 - No password reset implemented yet (future feature)
 - CORS is open for development (restrict in production)
-

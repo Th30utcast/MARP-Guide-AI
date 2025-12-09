@@ -12,7 +12,7 @@ from typing import Optional
 import bcrypt
 import psycopg2
 import redis
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 
@@ -29,6 +29,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Database connection
 def get_db_connection():
@@ -59,19 +60,22 @@ def init_db():
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Create users table
-        cur.execute("""
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS users (
                 user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 email VARCHAR(255) UNIQUE NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """)
-        
+        """
+        )
+
         # Create password_resets table
-        cur.execute("""
+        cur.execute(
+            """
             CREATE TABLE IF NOT EXISTS password_resets (
                 reset_token UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 user_id UUID REFERENCES users(user_id) ON DELETE CASCADE,
@@ -79,7 +83,8 @@ def init_db():
                 used BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
         conn.commit()
         cur.close()
@@ -149,14 +154,14 @@ def register(request: RegisterRequest):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Check if user already exists
         cur.execute("SELECT user_id FROM users WHERE email = %s", (request.email,))
         if cur.fetchone():
             cur.close()
             conn.close()
             raise HTTPException(status_code=400, detail="Email already registered")
-        
+
         # Hash password and create user
         password_hash = hash_password(request.password)
         cur.execute(
@@ -164,15 +169,13 @@ def register(request: RegisterRequest):
             (request.email, password_hash),
         )
         user_id = str(cur.fetchone()[0])
-        
+
         conn.commit()
         cur.close()
         conn.close()
-        
+
         logger.info(f"✅ User registered: {request.email}")
-        return RegisterResponse(
-            user_id=user_id, email=request.email, message="Registration successful"
-        )
+        return RegisterResponse(user_id=user_id, email=request.email, message="Registration successful")
     except HTTPException:
         raise
     except Exception as e:
@@ -186,29 +189,27 @@ def login(request: LoginRequest):
     try:
         conn = get_db_connection()
         cur = conn.cursor()
-        
+
         # Get user from database
-        cur.execute(
-            "SELECT user_id, password_hash FROM users WHERE email = %s", (request.email,)
-        )
+        cur.execute("SELECT user_id, password_hash FROM users WHERE email = %s", (request.email,))
         result = cur.fetchone()
-        
+
         if not result:
             cur.close()
             conn.close()
             raise HTTPException(status_code=401, detail="Invalid email or password")
-        
+
         user_id, password_hash = result
-        
+
         # Verify password
         if not verify_password(request.password, password_hash):
             cur.close()
             conn.close()
             raise HTTPException(status_code=401, detail="Invalid email or password")
-        
+
         # Generate session token
         session_token = generate_session_token()
-        
+
         # Store session in Redis (24 hour TTL)
         redis_client = get_redis_client()
         session_data = {"user_id": str(user_id), "email": request.email}
@@ -217,12 +218,12 @@ def login(request: LoginRequest):
             86400,  # 24 hours
             json.dumps(session_data),
         )
-        
+
         expires_at = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
-        
+
         cur.close()
         conn.close()
-        
+
         logger.info(f"✅ User logged in: {request.email}")
         return LoginResponse(
             session_token=session_token,
@@ -243,20 +244,20 @@ def logout(authorization: Optional[str] = Header(None)):
     try:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
-        
+
         session_token = authorization.replace("Bearer ", "")
         redis_client = get_redis_client()
-        
+
         # Get session data to find user_id
         session_data = redis_client.get(f"session:{session_token}")
         if session_data:
             # Delete session
             redis_client.delete(f"session:{session_token}")
-            
+
             # Delete chat history if exists
             # Note: We'll need user_id from session, but for now just delete session
             logger.info(f"✅ Session invalidated: {session_token[:10]}...")
-        
+
         return {"message": "Logout successful"}
     except HTTPException:
         raise
@@ -271,17 +272,17 @@ def validate_session(authorization: Optional[str] = Header(None)):
     try:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
-        
+
         session_token = authorization.replace("Bearer ", "")
         redis_client = get_redis_client()
-        
+
         session_data = redis_client.get(f"session:{session_token}")
         if not session_data:
             raise HTTPException(status_code=401, detail="Invalid or expired session")
-        
+
         # Parse session data (stored as JSON)
         session_dict = json.loads(session_data)
-        
+
         return ValidateResponse(
             user_id=session_dict["user_id"],
             email=session_dict["email"],
@@ -301,12 +302,11 @@ def health():
         # Test database connection
         conn = get_db_connection()
         conn.close()
-        
+
         # Test Redis connection
         redis_client = get_redis_client()
         redis_client.ping()
-        
+
         return {"status": "ok", "service": "auth-service"}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Service unhealthy: {str(e)}")
-

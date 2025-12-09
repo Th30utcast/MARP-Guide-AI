@@ -52,8 +52,7 @@ export function useChat() {
         // Second query - trigger comparison
         const comparisonResult = await sendComparisonQuery(query)
         setComparisonData(comparisonResult)
-        setComparisonShown(true)
-        localStorage.setItem('comparisonShown', 'true')
+        // Don't mark as shown yet - only when they select a model
         setIsLoading(false)
         // Don't add assistant message yet - wait for user to select model
         return
@@ -80,6 +79,10 @@ export function useChat() {
     // Save selection to state and localStorage
     setSelectedModel(modelId)
     localStorage.setItem('selectedModel', modelId)
+
+    // Mark comparison as shown only after user selects a model
+    setComparisonShown(true)
+    localStorage.setItem('comparisonShown', 'true')
 
     // Find the selected model's answer from comparison data
     const selectedResult = comparisonData.results.find(r => r.model_id === modelId)

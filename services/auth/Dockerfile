@@ -16,4 +16,3 @@ COPY services/auth/auth_service.py ./
 
 EXPOSE 8004
 CMD ["uvicorn", "auth_service:app", "--host", "0.0.0.0", "--port", "8004"]
-

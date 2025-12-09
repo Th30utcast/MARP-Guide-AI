@@ -17,12 +17,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
 
 import config
-from fastapi import FastAPI, HTTPException, Header, Depends
+import redis
+from fastapi import Depends, FastAPI, Header, HTTPException
 from openrouter_client import OpenRouterClient
 from prompt_templates import create_rag_prompt
 from pydantic import BaseModel, Field
 from retrieval_client import RetrievalClient
-import redis
 
 # Add common module to path for event publishing
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
@@ -41,11 +41,7 @@ retrieval_client = RetrievalClient()
 openrouter_client = OpenRouterClient()
 
 # Initialize Redis client for session validation
-redis_client = redis.Redis(
-    host=config.REDIS_HOST,
-    port=config.REDIS_PORT,
-    decode_responses=True
-)
+redis_client = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
 
 # Initialize event broker for analytics
 try:
@@ -59,6 +55,7 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Failed to initialize event broker: {e}. Analytics events will not be published.")
     event_broker = None
+
 
 # Session validation dependency
 def validate_session(authorization: Optional[str] = Header(None)) -> Dict:
@@ -82,15 +79,13 @@ def validate_session(authorization: Optional[str] = Header(None)) -> Dict:
 
         # Parse session data
         session = json.loads(session_data)
-        return {
-            "user_id": session.get("user_id"),
-            "email": session.get("email")
-        }
+        return {"user_id": session.get("user_id"), "email": session.get("email")}
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Session data corrupted")
     except Exception as e:
         logger.error(f"Session validation error: {e}")
         raise HTTPException(status_code=500, detail="Session validation failed")
+
 
 # Schemas:
 
@@ -171,6 +166,7 @@ def chat(req: ChatRequest, user: Dict = Depends(validate_session)):
                 query=req.query,
                 user_session_id=session_id,
                 model_id=model_id,
+                user_id=user_id,
                 correlation_id=correlation_id,
             )
             event_broker.publish(
@@ -340,6 +336,7 @@ def chat(req: ChatRequest, user: Dict = Depends(validate_session)):
                     latency_ms=latency,
                     citation_count=len(citations),
                     retrieval_count=len(chunks) if chunks else 0,
+                    user_id=user_id,
                     correlation_id=correlation_id,
                 )
                 event_broker.publish(
@@ -383,6 +380,7 @@ def compare_models(req: ChatRequest, user: Dict = Depends(validate_session)):
                 query=req.query,
                 user_session_id=session_id,
                 models=[m["id"] for m in config.COMPARISON_MODELS],
+                user_id=user_id,
                 correlation_id=correlation_id,
             )
             event_broker.publish(

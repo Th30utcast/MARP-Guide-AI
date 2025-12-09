@@ -10,7 +10,7 @@ function Login({ onLogin, onSwitchToRegister, error, setError }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError(null)
-    
+
     if (!email.trim() || !password.trim()) {
       setError('Please fill in all fields')
       return
@@ -187,4 +187,3 @@ function Login({ onLogin, onSwitchToRegister, error, setError }) {
 }
 
 export default Login
-

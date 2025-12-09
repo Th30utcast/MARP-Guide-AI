@@ -201,8 +201,16 @@ def create_retrieval_completed_event(
 
 
 def create_query_submitted_event(
-    query: str, user_session_id: str, model_id: str, correlation_id: Optional[str] = None
+    query: str, user_session_id: str, model_id: str, user_id: Optional[str] = None, correlation_id: Optional[str] = None
 ) -> Dict[str, Any]:
+    payload = {
+        "query": query,
+        "userSessionId": user_session_id,
+        "modelId": model_id,
+    }
+    if user_id:
+        payload["userId"] = user_id
+
     return {
         "eventType": "QuerySubmitted",
         "eventId": generate_event_id(),
@@ -210,11 +218,7 @@ def create_query_submitted_event(
         "correlationId": correlation_id or generate_event_id(),
         "source": "chat-service",
         "version": "1.0",
-        "payload": {
-            "query": query,
-            "userSessionId": user_session_id,
-            "modelId": model_id,
-        },
+        "payload": payload,
     }
 
 
@@ -226,8 +230,21 @@ def create_response_generated_event(
     latency_ms: float,
     citation_count: int,
     retrieval_count: int,
+    user_id: Optional[str] = None,
     correlation_id: Optional[str] = None,
 ) -> Dict[str, Any]:
+    payload = {
+        "query": query,
+        "response": response,
+        "modelId": model_id,
+        "userSessionId": user_session_id,
+        "latencyMs": latency_ms,
+        "citationCount": citation_count,
+        "retrievalCount": retrieval_count,
+    }
+    if user_id:
+        payload["userId"] = user_id
+
     return {
         "eventType": "ResponseGenerated",
         "eventId": generate_event_id(),
@@ -235,21 +252,21 @@ def create_response_generated_event(
         "correlationId": correlation_id or generate_event_id(),
         "source": "chat-service",
         "version": "1.0",
-        "payload": {
-            "query": query,
-            "response": response,
-            "modelId": model_id,
-            "userSessionId": user_session_id,
-            "latencyMs": latency_ms,
-            "citationCount": citation_count,
-            "retrievalCount": retrieval_count,
-        },
+        "payload": payload,
     }
 
 
 def create_model_comparison_triggered_event(
-    query: str, user_session_id: str, models: list, correlation_id: Optional[str] = None
+    query: str, user_session_id: str, models: list, user_id: Optional[str] = None, correlation_id: Optional[str] = None
 ) -> Dict[str, Any]:
+    payload = {
+        "query": query,
+        "userSessionId": user_session_id,
+        "models": models,
+    }
+    if user_id:
+        payload["userId"] = user_id
+
     return {
         "eventType": "ModelComparisonTriggered",
         "eventId": generate_event_id(),
@@ -257,11 +274,7 @@ def create_model_comparison_triggered_event(
         "correlationId": correlation_id or generate_event_id(),
         "source": "chat-service",
         "version": "1.0",
-        "payload": {
-            "query": query,
-            "userSessionId": user_session_id,
-            "models": models,
-        },
+        "payload": payload,
     }
 
 
