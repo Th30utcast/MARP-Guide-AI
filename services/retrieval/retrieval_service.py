@@ -53,11 +53,12 @@ class SearchResponse(BaseModel):
     results: List[SearchResult]
 
 
-# Load model and client once: Loads the embedding model and connects to Qdrant at startup
+# Load embedding model and Qdrant client
 model = load_embedding_model(EMBEDDING_MODEL)
 qdrant = create_qdrant_client(QDRANT_URL)
 
-# RabbitMQ broker setup: Connects to RabbitMQ and sets up queues/exchanges; continues if connection fails_broker = None
+# Initialize RabbitMQ broker for event publishing
+_broker = None
 try:
     _broker = RabbitMQEventBroker(
         host=RABBITMQ_HOST,
@@ -67,7 +68,7 @@ try:
     )
     logger.info("✅ RabbitMQ broker connected successfully")
 
-    # Auto-declare exchange, queue, and binding for retrieval.completed (best-effort)
+    # Declare queue and exchange for retrieval events
     try:
         if _broker.channel:
             _broker.channel.exchange_declare(exchange="events", exchange_type="topic", durable=True)
@@ -77,13 +78,12 @@ try:
             )
             logger.info("✅ Declared queue 'retrieval.completed' and bound to exchange 'events'")
     except Exception as e:
-        logger.warning(f"⚠️ Failed to auto-declare retrieval queue/binding: {e}")
+        logger.warning(f"⚠️ Failed to declare retrieval queue/binding: {e}")
 except Exception as e:
     logger.warning(f"⚠️ RabbitMQ broker not available: {e}. Events will not be published.")
     _broker = None
 
 
-# Health check: GET /health checks if Qdrant is reachable and returns service status
 @app.get("/health")
 def health():
     try:
@@ -93,10 +93,9 @@ def health():
         raise HTTPException(status_code=503, detail=str(e))
 
 
-# Search endpoint: POST /search converts the query to an embedding, searches Qdrant for similar chunks,
-# deduplicates and formats results, measures latency, optionally publishes an event, and returns the results.
 @app.post("/search", response_model=SearchResponse)
 def search(req: SearchRequest):
+    """Semantic search endpoint: generate query embedding, search Qdrant, and return results"""
     start = time.time()
 
     try:
@@ -111,12 +110,12 @@ def search(req: SearchRequest):
         payload = hit.payload or {}
         text = payload.get("text", "").strip()
 
-        # Avoid duplicates
+        # Deduplicate results
         if text in seen_texts:
             continue
         seen_texts.add(text)
 
-        # Trim very long texts
+        # Trim long texts
         if len(text) > 1700:
             text = text[:1700] + "…"
 
@@ -138,7 +137,7 @@ def search(req: SearchRequest):
     latency = round((time.time() - start) * 1000, 2)
     logger.info(f"🔍 Retrieved {len(results)} results | latency: {latency}ms")
 
-    # Publish RetrievalCompleted (best-effort; ignore failures)
+    # Publish RetrievalCompleted event
     if _broker is not None:
         try:
             summary = [

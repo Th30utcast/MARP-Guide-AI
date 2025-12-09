@@ -1,25 +1,49 @@
 import { useState, useEffect } from 'react'
+import PropTypes from 'prop-types'
 
+/**
+ * Analytics component - displays usage metrics and performance statistics.
+ * Supports two views:
+ * - Regular users: See their own personal analytics
+ * - Admin users: See global analytics across all users
+ *
+ * Fetches data from multiple analytics endpoints and auto-refreshes every 30 seconds.
+ *
+ * @param {Object} props
+ * @param {boolean} props.isAdmin - Whether current user has admin privileges
+ */
 function Analytics({ isAdmin }) {
-  const [summary, setSummary] = useState(null)
-  const [recentQueries, setRecentQueries] = useState([])
-  const [popularQueries, setPopularQueries] = useState([])
-  const [modelStats, setModelStats] = useState([])
+  // Analytics data state
+  const [summary, setSummary] = useState(null) // Overall metrics (total queries, avg latency, etc.)
+  const [recentQueries, setRecentQueries] = useState([]) // List of recent queries with timestamps
+  const [popularQueries, setPopularQueries] = useState([]) // Most frequently asked questions
+  const [modelStats, setModelStats] = useState([]) // Performance metrics per AI model
+
+  // UI state
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  /**
+   * Auto-fetch analytics on mount and set up 30-second refresh interval.
+   * Re-fetches if isAdmin changes (to show appropriate data for user role).
+   */
   useEffect(() => {
     fetchAnalytics()
-    // Refresh every 30 seconds
+    // Auto-refresh every 30 seconds to keep data current
     const interval = setInterval(fetchAnalytics, 30000)
     return () => clearInterval(interval)
   }, [isAdmin])
 
+  /**
+   * Fetches all analytics data from backend API.
+   * Makes parallel requests to multiple endpoints for optimal performance.
+   * Includes user_id parameter for regular users, omits for admins (to get global data).
+   */
   const fetchAnalytics = async () => {
     try {
       setLoading(true)
 
-      // Get session token and user_id from localStorage
+      // Get authentication credentials from localStorage
       const sessionToken = localStorage.getItem('session_token')
       const userId = localStorage.getItem('user_id')
 
@@ -29,14 +53,15 @@ function Analytics({ isAdmin }) {
         return
       }
 
-      // Prepare headers with authorization
+      // Prepare authorization headers for authenticated requests
       const headers = {
         'Authorization': `Bearer ${sessionToken}`
       }
 
-      // For admin, don't pass user_id; for regular users, pass user_id
+      // Admin users don't filter by user_id (see all data), regular users only see their own
       const userIdParam = isAdmin ? '' : `user_id=${userId}`
 
+      // Fetch all analytics data in parallel for performance
       const [summaryRes, recentRes, popularRes, statsRes] = await Promise.all([
         fetch(`/api/analytics/summary?${userIdParam}`, { headers }),
         fetch(`/api/analytics/recent-queries?${userIdParam}&limit=10`, { headers }),
@@ -44,6 +69,7 @@ function Analytics({ isAdmin }) {
         fetch(`/api/analytics/model-stats?${userIdParam}`, { headers })
       ])
 
+      // Parse and store all responses
       setSummary(await summaryRes.json())
       setRecentQueries(await recentRes.json())
       setPopularQueries(await popularRes.json())
@@ -57,6 +83,7 @@ function Analytics({ isAdmin }) {
     }
   }
 
+  // Loading state - only show spinner on initial load (not on refreshes)
   if (loading && !summary) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -71,6 +98,7 @@ function Analytics({ isAdmin }) {
     )
   }
 
+  // Error state - allow user to retry fetching analytics
   if (error) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -91,14 +119,16 @@ function Analytics({ isAdmin }) {
     )
   }
 
+  // Main analytics dashboard render
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
-      {/* Header */}
+      {/* Dashboard header with admin indicator */}
       <div>
         <div className="flex items-center gap-3">
           <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--lancaster-text-primary)' }}>
             Analytics Dashboard
           </h1>
+          {/* Admin badge - shown only for admin users viewing global data */}
           {isAdmin && (
             <span
               className="px-3 py-1 rounded-full text-xs font-semibold"
@@ -116,7 +146,7 @@ function Analytics({ isAdmin }) {
         </p>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary statistics cards - key metrics at a glance */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Queries"
@@ -156,8 +186,9 @@ function Analytics({ isAdmin }) {
         />
       </div>
 
+      {/* Two-column grid for Recent and Popular queries */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Queries */}
+        {/* Recent Queries panel - shows most recent 10 queries with timestamps */}
         <div
           className="border rounded-xl p-6"
           style={{
@@ -193,7 +224,7 @@ function Analytics({ isAdmin }) {
           </div>
         </div>
 
-        {/* Popular Queries */}
+        {/* Popular Queries panel - shows most frequently asked questions with count badges */}
         <div
           className="border rounded-xl p-6"
           style={{
@@ -213,6 +244,7 @@ function Analytics({ isAdmin }) {
                   <p className="text-sm flex-1" style={{ color: 'var(--lancaster-text-primary)' }}>
                     {q.query}
                   </p>
+                  {/* Count badge showing how many times this query was asked */}
                   <span
                     className="px-3 py-1 rounded-full text-xs font-semibold ml-2"
                     style={{
@@ -229,7 +261,7 @@ function Analytics({ isAdmin }) {
         </div>
       </div>
 
-      {/* Model Stats */}
+      {/* Model Performance panel - shows metrics breakdown per AI model */}
       <div
         className="border rounded-xl p-6"
         style={{
@@ -240,6 +272,7 @@ function Analytics({ isAdmin }) {
         <h2 className="text-xl font-bold mb-4" style={{ color: 'var(--lancaster-text-primary)' }}>
           Model Performance
         </h2>
+        {/* Grid of model cards showing usage and performance metrics */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {modelStats.map((model) => (
             <div
@@ -251,6 +284,7 @@ function Analytics({ isAdmin }) {
               }}
             >
               <h3 className="font-semibold mb-3" style={{ color: 'var(--lancaster-text-primary)' }}>
+                {/* Extract model name from full ID */}
                 {model.model_id.split('/')[1]}
               </h3>
               <div className="space-y-2 text-sm">
@@ -281,6 +315,20 @@ function Analytics({ isAdmin }) {
   )
 }
 
+// Quality: PropTypes validation for type safety
+Analytics.propTypes = {
+  isAdmin: PropTypes.bool.isRequired
+}
+
+/**
+ * StatCard component - reusable card for displaying a single metric with icon.
+ * Used for the summary statistics at the top of the analytics dashboard.
+ *
+ * @param {Object} props
+ * @param {string} props.title - Label for the metric (e.g., "Total Queries")
+ * @param {string|number} props.value - The metric value to display
+ * @param {ReactNode} props.icon - SVG icon element to display
+ */
 function StatCard({ title, value, icon }) {
   return (
     <div
@@ -300,6 +348,7 @@ function StatCard({ title, value, icon }) {
             {value}
           </p>
         </div>
+        {/* Icon container with brand color background */}
         <div
           className="w-12 h-12 rounded-lg flex items-center justify-center"
           style={{ backgroundColor: 'var(--lancaster-red)', color: 'var(--lancaster-white)' }}
@@ -309,6 +358,13 @@ function StatCard({ title, value, icon }) {
       </div>
     </div>
   )
+}
+
+// Quality: PropTypes validation for StatCard
+StatCard.propTypes = {
+  title: PropTypes.string.isRequired,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+  icon: PropTypes.node.isRequired
 }
 
 export default Analytics
