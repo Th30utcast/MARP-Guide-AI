@@ -31,9 +31,8 @@ app.add_middleware(
 )
 
 
-# Database connection
 def get_db_connection():
-    """Get PostgreSQL database connection."""
+    """Get PostgreSQL database connection"""
     return psycopg2.connect(
         host=os.getenv("POSTGRES_HOST", "postgres"),
         port=int(os.getenv("POSTGRES_PORT", "5432")),
@@ -43,9 +42,8 @@ def get_db_connection():
     )
 
 
-# Redis connection
 def get_redis_client():
-    """Get Redis client connection."""
+    """Get Redis client connection"""
     return redis.Redis(
         host=os.getenv("REDIS_HOST", "redis"),
         port=int(os.getenv("REDIS_PORT", "6379")),
@@ -54,14 +52,13 @@ def get_redis_client():
     )
 
 
-# Initialize database tables
 def init_db():
-    """Initialize database tables if they don't exist."""
+    """Initialize database tables and create admin user if needed"""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Create users table with is_admin column
+        # Create users table
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
@@ -74,7 +71,7 @@ def init_db():
         """
         )
 
-        # Add is_admin column if it doesn't exist (for existing databases)
+        # Add is_admin column for existing databases
         cur.execute(
             """
             DO $$
@@ -115,7 +112,7 @@ def init_db():
 
         conn.commit()
 
-        # Create admin user if it doesn't exist
+        # Create default admin user
         cur.execute("SELECT user_id FROM users WHERE email = %s", ("admin@example.com",))
         if not cur.fetchone():
             admin_password_hash = hash_password("admin")
@@ -133,10 +130,9 @@ def init_db():
         logger.error(f"❌ Failed to initialize database: {e}")
 
 
-# Initialize database on startup
 @app.on_event("startup")
 def startup_event():
-    """Initialize database on service startup."""
+    """Initialize database on service startup"""
     init_db()
 
 
@@ -172,26 +168,24 @@ class ValidateResponse(BaseModel):
     valid: bool
 
 
-# Helper Functions
 def hash_password(password: str) -> str:
-    """Hash password using bcrypt."""
+    """Hash password using bcrypt"""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    """Verify password against hash."""
+    """Verify password against hash"""
     return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
 
 def generate_session_token() -> str:
-    """Generate a secure random session token."""
+    """Generate secure random session token"""
     return secrets.token_urlsafe(32)
 
 
-# API Endpoints
 @app.post("/auth/register", response_model=RegisterResponse)
 def register(request: RegisterRequest):
-    """Register a new user."""
+    """Register a new user"""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -226,7 +220,7 @@ def register(request: RegisterRequest):
 
 @app.post("/auth/login", response_model=LoginResponse)
 def login(request: LoginRequest):
-    """Login and create session."""
+    """Login and create session"""
     try:
         conn = get_db_connection()
         cur = conn.cursor()
@@ -282,7 +276,7 @@ def login(request: LoginRequest):
 
 @app.post("/auth/logout")
 def logout(authorization: Optional[str] = Header(None)):
-    """Logout and invalidate session."""
+    """Logout and invalidate session"""
     try:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
@@ -290,14 +284,9 @@ def logout(authorization: Optional[str] = Header(None)):
         session_token = authorization.replace("Bearer ", "")
         redis_client = get_redis_client()
 
-        # Get session data to find user_id
         session_data = redis_client.get(f"session:{session_token}")
         if session_data:
-            # Delete session
             redis_client.delete(f"session:{session_token}")
-
-            # Delete chat history if exists
-            # Note: We'll need user_id from session, but for now just delete session
             logger.info(f"✅ Session invalidated: {session_token[:10]}...")
 
         return {"message": "Logout successful"}
@@ -310,7 +299,7 @@ def logout(authorization: Optional[str] = Header(None)):
 
 @app.get("/auth/validate", response_model=ValidateResponse)
 def validate_session(authorization: Optional[str] = Header(None)):
-    """Validate session token (internal endpoint for other services)."""
+    """Validate session token"""
     try:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
@@ -322,7 +311,6 @@ def validate_session(authorization: Optional[str] = Header(None)):
         if not session_data:
             raise HTTPException(status_code=401, detail="Invalid or expired session")
 
-        # Parse session data (stored as JSON)
         session_dict = json.loads(session_data)
 
         return ValidateResponse(
@@ -340,7 +328,7 @@ def validate_session(authorization: Optional[str] = Header(None)):
 
 @app.post("/auth/preferences/model")
 def set_model_preference(model_id: str, authorization: Optional[str] = Header(None)):
-    """Set user's preferred model."""
+    """Set user's preferred model"""
     try:
         # Validate session
         if not authorization or not authorization.startswith("Bearer "):
@@ -385,7 +373,7 @@ def set_model_preference(model_id: str, authorization: Optional[str] = Header(No
 
 @app.get("/auth/preferences/model")
 def get_model_preference(authorization: Optional[str] = Header(None)):
-    """Get user's preferred model."""
+    """Get user's preferred model"""
     try:
         # Validate session
         if not authorization or not authorization.startswith("Bearer "):
@@ -424,7 +412,6 @@ def get_model_preference(authorization: Optional[str] = Header(None)):
 
 @app.get("/health")
 def health():
-    """Health check endpoint."""
     try:
         # Test database connection
         conn = get_db_connection()

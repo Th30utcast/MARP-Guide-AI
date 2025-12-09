@@ -31,8 +31,6 @@ citation_clicked_events: List[Dict] = []
 model_comparison_events: List[Dict] = []
 model_selected_events: List[Dict] = []
 
-# Schemas for API responses
-
 
 class PopularQuery(BaseModel):
     query: str
@@ -53,9 +51,6 @@ class AnalyticsSummary(BaseModel):
     total_comparisons: int
     avg_latency_ms: float
     avg_citations_per_response: float
-
-
-# Event handlers
 
 
 def handle_query_submitted(ch, method, properties, body):
@@ -132,7 +127,6 @@ def handle_model_selected(ch, method, properties, body):
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 
-# Helper function for admin check
 def check_if_admin(authorization: Optional[str]) -> bool:
     """Check if the user is an admin by validating session with auth service"""
     if not authorization or not authorization.startswith("Bearer "):
@@ -151,9 +145,6 @@ def check_if_admin(authorization: Optional[str]) -> bool:
         return False
 
 
-# API Endpoints
-
-
 @app.get("/health")
 def health():
     return {"status": "healthy", "service": "analytics"}
@@ -161,13 +152,12 @@ def health():
 
 @app.get("/analytics/summary", response_model=AnalyticsSummary)
 def get_summary(
-    user_id: Optional[str] = Query(None, description="User ID for filtering analytics"),
+    user_id: Optional[str] = Query(None, description="User ID for filtering"),
     authorization: Optional[str] = Header(None),
 ):
-    """Get analytics summary - shows all data for admin, filtered for regular users"""
+    """Get analytics summary (admins see all data, users see only their own)"""
     is_admin = check_if_admin(authorization)
 
-    # If admin, show all data; otherwise filter by user_id
     if is_admin:
         user_query_events = query_events
         user_response_events = response_events
@@ -186,7 +176,6 @@ def get_summary(
     total_feedback = len(user_feedback_events)
     total_comparisons = len(user_comparison_events)
 
-    # Calculate averages
     avg_latency = 0.0
     avg_citations = 0.0
 
@@ -210,11 +199,10 @@ def get_popular_queries(
     limit: int = Query(10, ge=1, le=100),
     authorization: Optional[str] = Header(None),
 ):
-    """Get most popular queries - shows all data for admin, filtered for regular users"""
+    """Get most popular queries (admins see all data, users see only their own)"""
     is_admin = check_if_admin(authorization)
     query_counts = {}
 
-    # If admin, use all events; otherwise filter by user_id
     if is_admin:
         user_query_events = query_events
     else:
@@ -226,7 +214,6 @@ def get_popular_queries(
         query = event["payload"]["query"]
         query_counts[query] = query_counts.get(query, 0) + 1
 
-    # Sort by count descending
     sorted_queries = sorted(query_counts.items(), key=lambda x: x[1], reverse=True)
 
     return [PopularQuery(query=query, count=count) for query, count in sorted_queries[:limit]]
@@ -236,11 +223,10 @@ def get_popular_queries(
 def get_model_stats(
     user_id: Optional[str] = Query(None, description="User ID for filtering"), authorization: Optional[str] = Header(None)
 ):
-    """Get statistics for each model - shows all data for admin, filtered for regular users"""
+    """Get statistics for each model (admins see all data, users see only their own)"""
     is_admin = check_if_admin(authorization)
     model_data = {}
 
-    # If admin, use all events; otherwise filter by user_id
     if is_admin:
         user_response_events = response_events
     else:
@@ -278,10 +264,9 @@ def get_recent_queries(
     limit: int = Query(10, ge=1, le=100),
     authorization: Optional[str] = Header(None),
 ):
-    """Get recent queries - shows all data for admin, filtered for regular users"""
+    """Get recent queries (admins see all data, users see only their own)"""
     is_admin = check_if_admin(authorization)
 
-    # If admin, use all events; otherwise filter by user_id
     if is_admin:
         user_query_events = query_events
     else:
@@ -289,7 +274,7 @@ def get_recent_queries(
             raise HTTPException(status_code=400, detail="user_id is required for non-admin users")
         user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
 
-    recent = user_query_events[-limit:][::-1]  # Last N in reverse order
+    recent = user_query_events[-limit:][::-1]
     return [
         {
             "query": e["payload"]["query"],
@@ -303,8 +288,7 @@ def get_recent_queries(
 
 @app.post("/analytics/reset")
 def reset_analytics():
-    """Reset all analytics data - clears all stored events"""
-    # Clear all event lists (no global needed since we're calling methods, not reassigning)
+    """Reset all analytics data"""
     query_events.clear()
     response_events.clear()
     feedback_events.clear()
@@ -328,15 +312,13 @@ def reset_analytics():
     }
 
 
-# Startup: Initialize event broker and start consuming
 @app.on_event("startup")
 def startup_event():
-    """Initialize RabbitMQ consumer on startup"""
+    """Initialize RabbitMQ consumer and start consuming events"""
     import threading
 
     def consume_events():
         try:
-            # Initialize event broker
             broker = RabbitMQEventBroker(
                 host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
                 port=int(os.getenv("RABBITMQ_PORT", "5672")),
@@ -344,7 +326,6 @@ def startup_event():
                 password=os.getenv("RABBITMQ_PASS", "guest"),
             )
 
-            # Declare queues and bind to routing keys
             queues = [
                 ("analytics_query_submitted", "analytics.query.submitted", handle_query_submitted),
                 ("analytics_response_generated", "analytics.response.generated", handle_response_generated),
@@ -363,7 +344,6 @@ def startup_event():
                 broker.channel.queue_bind(exchange="events", queue=queue_name, routing_key=routing_key)
                 logger.info(f"Bound queue {queue_name} to routing key {routing_key}")
 
-            # Start consuming from all queues in separate threads
             for queue_name, _, handler in queues:
 
                 def consume_queue(q_name, q_handler):
@@ -383,7 +363,6 @@ def startup_event():
         except Exception as e:
             logger.error(f"❌ Failed to initialize analytics consumer: {e}")
 
-    # Start consumer in background thread
     consumer_thread = threading.Thread(target=consume_events, daemon=True)
     consumer_thread.start()
 
