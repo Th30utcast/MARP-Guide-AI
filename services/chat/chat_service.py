@@ -10,8 +10,11 @@ import logging
 # Imports standard libraries and project modules: FastAPI for the web API, Pydantic for data validation,
 # logging, and custom clients for retrieval and LLM calls.
 import os
+import re
+import sys
 import time
-from typing import List, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, List, Optional
 
 import config
 from fastapi import FastAPI, HTTPException
@@ -19,6 +22,11 @@ from openrouter_client import OpenRouterClient
 from prompt_templates import create_rag_prompt
 from pydantic import BaseModel, Field
 from retrieval_client import RetrievalClient
+
+# Add common module to path for event publishing
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+from common import events
+from common.mq import RabbitMQEventBroker
 
 # Sets logging to INFO and creates a logger for this module.
 logging.basicConfig(level=logging.INFO)
@@ -30,6 +38,19 @@ app = FastAPI(title="Chat Service", version="1.0.0")
 # Initialize clients: Creates instances of RetrievalClient and OpenRouterClient for later use.
 retrieval_client = RetrievalClient()
 openrouter_client = OpenRouterClient()
+
+# Initialize event broker for analytics
+try:
+    event_broker = RabbitMQEventBroker(
+        host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
+        port=int(os.getenv("RABBITMQ_PORT", "5672")),
+        username=os.getenv("RABBITMQ_USER", "guest"),
+        password=os.getenv("RABBITMQ_PASS", "guest"),
+    )
+    logger.info("✅ Event broker initialized for analytics")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to initialize event broker: {e}. Analytics events will not be published.")
+    event_broker = None
 
 # Schemas:
 
@@ -45,6 +66,8 @@ class Citation(BaseModel):
 class ChatRequest(BaseModel):
     query: str = Field(..., description="User's question about MARP")
     top_k: int = Field(8, ge=1, le=20, description="Number of chunks to retrieve")
+    session_id: Optional[str] = Field(None, description="User session ID for analytics")
+    model_id: Optional[str] = Field(None, description="Model ID to use for generation (defaults to PRIMARY_MODEL_ID)")
 
 
 # Defines the response model: query, answer, and a list of citations.
@@ -52,6 +75,20 @@ class ChatResponse(BaseModel):
     query: str
     answer: str
     citations: List[Citation]
+
+
+# Multi-Model Comparison Models (Tier 2-D)
+class ModelComparisonResult(BaseModel):
+    model_id: str
+    model_name: str
+    answer: str
+    citations: List[Citation]
+
+
+class ComparisonResponse(BaseModel):
+    query: str
+    reformulated_query: str
+    results: List[ModelComparisonResult]
 
 
 # Health check
@@ -76,10 +113,43 @@ def chat(req: ChatRequest):
     """
     start_time = time.time()
 
+    # Generate session ID if not provided
+    session_id = req.session_id or events.generate_event_id()
+    correlation_id = events.generate_event_id()
+
+    # Use model_id from request or fall back to PRIMARY_MODEL_ID
+    model_id = req.model_id or config.PRIMARY_MODEL_ID
+
+    # Publish QuerySubmitted event
+    if event_broker:
+        try:
+            query_event = events.create_query_submitted_event(
+                query=req.query,
+                user_session_id=session_id,
+                model_id=model_id,
+                correlation_id=correlation_id,
+            )
+            event_broker.publish(
+                routing_key=events.ROUTING_KEY_QUERY_SUBMITTED,
+                message=json.dumps(query_event),
+                exchange="events",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to publish QuerySubmitted event: {e}")
+
     try:
+        # (Step 0 - Query Reformulation): Clean up query to fix typos and improve phrasing
+        search_query = req.query
+        if config.ENABLE_QUERY_REFORMULATION:
+            logger.info(f"🔧 Step 0: Reformulating query to fix typos and improve clarity")
+            search_query = openrouter_client.reformulate_query(req.query)
+            if search_query != req.query:
+                logger.info(f"📝 Original: {req.query}")
+                logger.info(f"✨ Reformulated: {search_query}")
+
         # (Step 1 - Retrieval): Logs and searches for relevant document chunks using the retrieval client.
-        logger.info(f"🔍 Step 1: Retrieving chunks for query: {req.query[:50]}...")
-        chunks = retrieval_client.search(req.query, req.top_k)
+        logger.info(f"🔍 Step 1: Retrieving chunks for query: {search_query[:50]}...")
+        chunks = retrieval_client.search(search_query, req.top_k)
 
         # (No chunks handling): If no chunks are found, returns an error message with empty citations.
         if not chunks:
@@ -97,8 +167,14 @@ def chat(req: ChatRequest):
         prompt = create_rag_prompt(req.query, chunks)
 
         # (Step 3 - Generation): Sends the prompt to the LLM via OpenRouter to generate the answer.
-        logger.info("🤖 Step 3: Generating answer with LLM")
-        answer = openrouter_client.generate_answer(prompt)
+        logger.info(f"🤖 Step 3: Generating answer with LLM (model: {model_id})")
+        # Use specified model or default client
+        if model_id != config.PRIMARY_MODEL_ID:
+            # Create a temporary client with the specified model
+            model_client = OpenRouterClient(model=model_id)
+            answer = model_client.generate_answer(prompt)
+        else:
+            answer = openrouter_client.generate_answer(prompt)
 
         # (Step 4 - Citation extraction): Extracts only citations that were actually referenced
         # in the answer by looking for inline citation markers like [1], [2], etc.
@@ -170,13 +246,16 @@ def chat(req: ChatRequest):
                                     break
 
                 # Renumber citations in the answer to match deduplicated list
-                # Sort by citation number in descending order to avoid replacement conflicts
-                # (e.g., replacing [1] before [10] would corrupt [10])
+                # Use temporary placeholders to avoid conflicts during replacement
                 for old_num in sorted(cited_numbers, reverse=True):
                     if old_num in citation_mapping:
                         new_num = citation_mapping[old_num]
-                        # Replace all occurrences of [old_num] with [new_num]
-                        answer = answer.replace(f"[{old_num}]", f"[{new_num}]")
+                        # Replace with temporary placeholder to avoid conflicts
+                        answer = answer.replace(f"[{old_num}]", f"<<CITE_{new_num}>>")
+
+                # Now replace all placeholders with final citation numbers
+                for new_num in set(citation_mapping.values()):
+                    answer = answer.replace(f"<<CITE_{new_num}>>", f"[{new_num}]")
 
                 logger.info(f"Renumbered citations: {citation_mapping}")
 
@@ -191,16 +270,41 @@ def chat(req: ChatRequest):
                     for new_pos, old_pos in enumerate(sorted(final_cited_numbers), start=1):
                         final_mapping[old_pos] = new_pos
 
-                    # Replace citation numbers in descending order to avoid conflicts
+                    # Use placeholders again for conflict-free replacement
                     for old_pos in sorted(final_cited_numbers, reverse=True):
                         new_pos = final_mapping[old_pos]
-                        answer = answer.replace(f"[{old_pos}]", f"[{new_pos}]")
+                        answer = answer.replace(f"[{old_pos}]", f"<<FINAL_{new_pos}>>")
+
+                    # Replace all placeholders with final numbers
+                    for new_pos in final_mapping.values():
+                        answer = answer.replace(f"<<FINAL_{new_pos}>>", f"[{new_pos}]")
 
                     logger.info(f"Final renumbering to consecutive: {final_mapping}")
 
         # (Latency logging): Calculates and logs how long the request took in milliseconds.
         latency = round((time.time() - start_time) * 1000, 2)
         logger.info(f"✅ Chat completed in {latency}ms | Citations: {len(citations)}")
+
+        # Publish ResponseGenerated event
+        if event_broker:
+            try:
+                response_event = events.create_response_generated_event(
+                    query=req.query,
+                    response=answer,
+                    model_id=model_id,
+                    user_session_id=session_id,
+                    latency_ms=latency,
+                    citation_count=len(citations),
+                    retrieval_count=len(chunks) if chunks else 0,
+                    correlation_id=correlation_id,
+                )
+                event_broker.publish(
+                    routing_key=events.ROUTING_KEY_RESPONSE_GENERATED,
+                    message=json.dumps(response_event),
+                    exchange="events",
+                )
+            except Exception as e:
+                logger.warning(f"Failed to publish ResponseGenerated event: {e}")
 
         # (Success response): Returns the ChatResponse with the query, generated answer, and citations.
         return ChatResponse(query=req.query, answer=answer, citations=citations)
@@ -209,3 +313,207 @@ def chat(req: ChatRequest):
     except Exception as e:
         logger.error(f"❌ Error in chat endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to process chat request: {str(e)}")
+
+
+# Multi-Model Comparison endpoint (Tier 2-D)
+@app.post("/chat/compare", response_model=ComparisonResponse)
+def compare_models(req: ChatRequest):
+    """
+    Multi-model comparison endpoint
+    Generates answers from 3 free models in parallel for user selection
+    """
+    start_time = time.time()
+
+    # Generate session ID if not provided
+    session_id = req.session_id or events.generate_event_id()
+    correlation_id = events.generate_event_id()
+
+    # Publish ModelComparisonTriggered event
+    if event_broker:
+        try:
+            comparison_event = events.create_model_comparison_triggered_event(
+                query=req.query,
+                user_session_id=session_id,
+                models=[m["id"] for m in config.COMPARISON_MODELS],
+                correlation_id=correlation_id,
+            )
+            event_broker.publish(
+                routing_key=events.ROUTING_KEY_MODEL_COMPARISON_TRIGGERED,
+                message=json.dumps(comparison_event),
+                exchange="events",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to publish ModelComparisonTriggered event: {e}")
+
+    try:
+        # Step 0: Query Reformulation (once, shared by all models)
+        search_query = req.query
+        if config.ENABLE_QUERY_REFORMULATION:
+            logger.info("🔧 Reformulating query for all models")
+            search_query = openrouter_client.reformulate_query(req.query)
+            if search_query != req.query:
+                logger.info(f"📝 Original: {req.query}")
+                logger.info(f"✨ Reformulated: {search_query}")
+
+        # Step 1: Retrieval (once, shared by all models)
+        logger.info(f"🔍 Retrieving chunks for query: {search_query[:50]}...")
+        chunks = retrieval_client.search(search_query, req.top_k)
+
+        if not chunks:
+            logger.warning("⚠️ No chunks retrieved for query")
+            # Return empty results for all models
+            return ComparisonResponse(
+                query=req.query,
+                reformulated_query=search_query,
+                results=[
+                    ModelComparisonResult(
+                        model_id=model["id"],
+                        model_name=model["name"],
+                        answer="I couldn't find any relevant information in the MARP documents to answer your question.",
+                        citations=[],
+                    )
+                    for model in config.COMPARISON_MODELS
+                ],
+            )
+
+        logger.info(f"✅ Retrieved {len(chunks)} chunks")
+
+        # Step 2: Build RAG prompt (once, shared by all models)
+        logger.info("📝 Building RAG prompt")
+        prompt = create_rag_prompt(req.query, chunks)
+
+        # Step 3: Parallel Generation - Generate answers from 3 models simultaneously
+        logger.info(f"🤖 Generating answers from {len(config.COMPARISON_MODELS)} models in parallel")
+
+        def generate_with_model(model_config: Dict) -> ModelComparisonResult:
+            """Helper function to generate answer with a specific model"""
+            try:
+                # Create client for this specific model
+                client = OpenRouterClient(model=model_config["id"])
+
+                # Generate answer
+                answer = client.generate_answer(prompt)
+
+                # Extract citations (reuse existing logic)
+                insufficient_info_phrases = [
+                    "does not contain",
+                    "doesn't contain",
+                    "do not contain",
+                    "don't contain",
+                    "not enough information",
+                    "cannot answer",
+                    "can't answer",
+                    "unable to answer",
+                    "no information",
+                ]
+
+                answer_lower = answer.lower()
+                answer_start = answer_lower[:150]
+                has_insufficient_info = any(phrase in answer_start for phrase in insufficient_info_phrases)
+
+                if has_insufficient_info:
+                    answer = re.sub(r"\[\d+\]", "", answer).strip()
+                    citations = []
+                else:
+                    # Extract cited numbers
+                    cited_numbers = set(int(match) for match in re.findall(r"\[(\d+)\]", answer))
+
+                    # No citations = hallucination
+                    if len(cited_numbers) == 0:
+                        logger.warning(f"⚠️ {model_config['name']} answered without citations - rejecting")
+                        answer = "The MARP documents provided do not contain information about this topic."
+                        citations = []
+                    else:
+                        # Build citations list
+                        citations = []
+                        seen_citations = set()
+                        citation_mapping = {}
+
+                        for idx, chunk in enumerate(chunks, start=1):
+                            if idx in cited_numbers:
+                                citation_key = (chunk.get("title", ""), chunk.get("page", 0))
+                                if citation_key not in seen_citations and citation_key[0] and citation_key[1]:
+                                    citations.append(
+                                        Citation(
+                                            title=chunk.get("title", "Unknown"),
+                                            page=chunk.get("page", 0),
+                                            url=chunk.get("url", ""),
+                                        )
+                                    )
+                                    seen_citations.add(citation_key)
+                                    citation_mapping[idx] = len(citations)
+                                elif citation_key in seen_citations:
+                                    for old_idx, new_idx in citation_mapping.items():
+                                        if (
+                                            chunks[old_idx - 1].get("title", ""),
+                                            chunks[old_idx - 1].get("page", 0),
+                                        ) == citation_key:
+                                            citation_mapping[idx] = new_idx
+                                            break
+
+                        # Renumber citations using placeholders to avoid conflicts
+                        for old_num in sorted(cited_numbers, reverse=True):
+                            if old_num in citation_mapping:
+                                new_num = citation_mapping[old_num]
+                                answer = answer.replace(f"[{old_num}]", f"<<CITE_{new_num}>>")
+
+                        # Replace placeholders with final citation numbers
+                        for new_num in set(citation_mapping.values()):
+                            answer = answer.replace(f"<<CITE_{new_num}>>", f"[{new_num}]")
+
+                        # Filter to final citations
+                        final_cited_numbers = set(int(match) for match in re.findall(r"\[(\d+)\]", answer))
+                        citations = [cit for i, cit in enumerate(citations, start=1) if i in final_cited_numbers]
+
+                        # Ensure consecutive numbering
+                        if final_cited_numbers and sorted(final_cited_numbers) != list(range(1, len(citations) + 1)):
+                            final_mapping = {}
+                            for new_pos, old_pos in enumerate(sorted(final_cited_numbers), start=1):
+                                final_mapping[old_pos] = new_pos
+
+                            # Use placeholders for conflict-free replacement
+                            for old_pos in sorted(final_cited_numbers, reverse=True):
+                                new_pos = final_mapping[old_pos]
+                                answer = answer.replace(f"[{old_pos}]", f"<<FINAL_{new_pos}>>")
+
+                            # Replace placeholders with final numbers
+                            for new_pos in final_mapping.values():
+                                answer = answer.replace(f"<<FINAL_{new_pos}>>", f"[{new_pos}]")
+
+                logger.info(f"✅ {model_config['name']}: Generated answer with {len(citations)} citations")
+                return ModelComparisonResult(
+                    model_id=model_config["id"], model_name=model_config["name"], answer=answer, citations=citations
+                )
+
+            except Exception as e:
+                logger.error(f"❌ Error with model {model_config['name']}: {e}")
+                return ModelComparisonResult(
+                    model_id=model_config["id"],
+                    model_name=model_config["name"],
+                    answer=f"Error generating answer with {model_config['name']}. Please try again.",
+                    citations=[],
+                )
+
+        # Execute parallel generation with ThreadPoolExecutor
+        results = []
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            # Submit all 3 model generation tasks
+            future_to_model = {executor.submit(generate_with_model, model): model for model in config.COMPARISON_MODELS}
+
+            # Collect results as they complete
+            for future in as_completed(future_to_model):
+                result = future.result()
+                results.append(result)
+
+        # Sort results to maintain consistent order (Gemini, DeepSeek, Mistral)
+        model_order = {model["id"]: i for i, model in enumerate(config.COMPARISON_MODELS)}
+        results.sort(key=lambda r: model_order.get(r.model_id, 999))
+
+        latency = round((time.time() - start_time) * 1000, 2)
+        logger.info(f"✅ Multi-model comparison completed in {latency}ms")
+
+        return ComparisonResponse(query=req.query, reformulated_query=search_query, results=results)
+
+    except Exception as e:
+        logger.error(f"❌ Error in compare_models endpoint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to compare models: {str(e)}")

@@ -43,6 +43,58 @@ class OpenRouterClient:
 
         logger.info(f"✅ OpenRouter client initialized | Model: {self.model}")
 
+    def reformulate_query(self, user_query: str) -> str:
+        """
+        Clean and reformulate user query to improve retrieval.
+        Fixes typos, improves phrasing, and normalizes the query.
+
+        Args:
+            user_query: Raw user query (may contain typos or unclear phrasing)
+
+        Returns:
+            Cleaned and reformulated query optimized for semantic search
+        """
+        try:
+            logger.info(f"🔧 Reformulating query: {user_query[:50]}...")
+
+            # Create a focused prompt for query reformulation
+            reformulation_prompt = f"""You are a query reformulation assistant for a university regulations database.
+
+Your task: Clean up and reformulate the user's query to make it clearer and more effective for semantic search.
+
+Instructions:
+1. Fix any spelling errors or typos
+2. Rephrase if needed for clarity
+3. Keep the core intent and meaning
+4. Make it concise and specific
+5. Return ONLY the reformulated query, nothing else
+
+User query: "{user_query}"
+
+Reformulated query:"""
+
+            # Call LLM with low temperature for consistent results
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": reformulation_prompt}],
+                temperature=0.3,  # Low temperature for more deterministic output
+                max_tokens=100,  # Queries should be short
+            )
+
+            reformulated = response.choices[0].message.content.strip()
+
+            # Remove any quotes that the LLM might add
+            reformulated = reformulated.strip("\"'")
+
+            logger.info(f"✅ Reformulated: {reformulated}")
+
+            return reformulated
+
+        except Exception as e:
+            logger.warning(f"⚠️ Query reformulation failed: {e}, using original query")
+            # If reformulation fails, return original query as fallback
+            return user_query
+
     def generate_answer(self, prompt: str) -> str:
         # Send prompt to LLM and get generated answer back
 
