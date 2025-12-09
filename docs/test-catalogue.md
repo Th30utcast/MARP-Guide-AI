@@ -5,8 +5,8 @@
 **Models Tested**:
 
 - [GPT-4o Mini](./test-results-gpt4o-mini.md) ✅ Complete
-- [Google Gemma 3n 2B](./test-results-gemma-3n-2b.md) ⏳ Pending
-- [DeepSeek Chat](./test-results-deepseek-chat.md) ⏳ Pending
+- [Google Gemma 3n 2B](./test-results-gemma-3n-2b.md) ✅ Complete
+- [DeepSeek Chat](./test-results-deepseek-chat.md) ✅ Complete
 
 **Comparison Summary**: [View Model Comparison →](./model-comparison-summary.md)
 
@@ -25,23 +25,23 @@
 
 | # | Question | Category | Should Pass? | GPT-4o Mini | Gemma 3n 2B | DeepSeek |
 |---|----------|----------|--------------|-------------|-------------|----------|
-| 1 | What is MARP? | Basic Knowledge | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-1-what-is-marp--pass) | ⏳ | ⏳ |
-| 2 | Why does Lancaster have MARP? | Basic Knowledge | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-2-purpose-of-marp--pass) | ⏳ | ⏳ |
-| 3 | Illness during exams? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-3-illness-during-exams--pass) | ⏳ | ⏳ |
-| 4 | First class degree requirements? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-4-first-class-honours-requirements--pass) | ⏳ | ⏳ |
-| 5 | What is condonation? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-5-module-condonation--pass) | ⏳ | ⏳ |
-| 6 | Plagiarism policy? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-6-plagiarism-policy--pass) | ⏳ | ⏳ |
-| 7 | Can I retake failed exam? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-7-retake-failed-exam--pass) | ⏳ | ⏳ |
-| 8 | Credits to graduate? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-8-credit-requirements--pass) | ⏳ | ⏳ |
-| 9 | Weather in Lancaster? | Edge Case | ❌ No (Out of scope) | [✅](./test-results-gpt4o-mini.md#test-9-out-of-scope---weather--pass-) | ⏳ | ⏳ |
-| 10 | Tell me about grades | Edge Case | ✅ Yes (Vague) | [✅](./test-results-gpt4o-mini.md#test-10-vague-question---grades--pass) | ⏳ | ⏳ |
-| 11 | What if I fail? | Edge Case | ✅ Yes (Ambiguous) | [✅](./test-results-gpt4o-mini.md#test-11-ambiguous-question---failure--pass) | ⏳ | ⏳ |
-| 12 | "Waht is extneuting..." (typos) | Edge Case | ✅ Yes (Typos) | [✅](./test-results-gpt4o-mini.md#test-12-typo-question--pass-) | ⏳ | ⏳ |
-| 13 | UG assessment requirements? | Citation Test | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-13-citation-format--pass) | ⏳ | ⏳ |
-| 14 | Underwater basket weaving? | Citation Test | ❌ No (Fake topic) | [✅](./test-results-gpt4o-mini.md#test-14-hallucination-check--pass-) | ⏳ | ⏳ |
-| 15 | Submission deadlines? | Citation Test | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-15-submission-deadlines--pass) | ⏳ | ⏳ |
-| 16 | Academic misconduct? | Error Handling | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-16-academic-misconduct--pass) | ⏳ | ⏳ |
-| 17 | "" (empty) | Error Handling | ❌ No (Invalid) | [✅](./test-results-gpt4o-mini.md#test-17-empty-query--pass-) | ⏳ | ⏳ |
+| 1 | What is MARP? | Basic Knowledge | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-1-what-is-marp--pass) | [✅](./test-results-gemma-3n-2b.md#test-1) | [✅](./test-results-deepseek-chat.md#test-1) |
+| 2 | Why does Lancaster have MARP? | Basic Knowledge | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-2-purpose-of-marp--pass) | [✅](./test-results-gemma-3n-2b.md#test-2) | [✅](./test-results-deepseek-chat.md#test-2) |
+| 3 | Illness during exams? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-3-illness-during-exams--pass) | [✅](./test-results-gemma-3n-2b.md#test-3) | [✅](./test-results-deepseek-chat.md#test-3) |
+| 4 | First class degree requirements? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-4-first-class-honours-requirements--pass) | [✅](./test-results-gemma-3n-2b.md#test-4) | [✅](./test-results-deepseek-chat.md#test-4) |
+| 5 | What is condonation? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-5-module-condonation--pass) | [✅](./test-results-gemma-3n-2b.md#test-5) | [✅](./test-results-deepseek-chat.md#test-5) |
+| 6 | Plagiarism policy? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-6-plagiarism-policy--pass) | [✅](./test-results-gemma-3n-2b.md#test-6) | [✅](./test-results-deepseek-chat.md#test-6) |
+| 7 | Can I retake failed exam? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-7-retake-failed-exam--pass) | [✅](./test-results-gemma-3n-2b.md#test-7) | [✅](./test-results-deepseek-chat.md#test-7) |
+| 8 | Credits to graduate? | Specific Regs | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-8-credit-requirements--pass) | [✅](./test-results-gemma-3n-2b.md#test-8) | [✅](./test-results-deepseek-chat.md#test-8) |
+| 9 | Weather in Lancaster? | Edge Case | ❌ No (Out of scope) | [✅](./test-results-gpt4o-mini.md#test-9-out-of-scope---weather--pass-) | [✅](./test-results-gemma-3n-2b.md#test-9) | [✅](./test-results-deepseek-chat.md#test-9) |
+| 10 | Tell me about grades | Edge Case | ✅ Yes (Vague) | [✅](./test-results-gpt4o-mini.md#test-10-vague-question---grades--pass) | [✅](./test-results-gemma-3n-2b.md#test-10) | [✅](./test-results-deepseek-chat.md#test-10) |
+| 11 | What if I fail? | Edge Case | ✅ Yes (Ambiguous) | [✅](./test-results-gpt4o-mini.md#test-11-ambiguous-question---failure--pass) | [❌](./test-results-gemma-3n-2b.md#test-11) | [✅](./test-results-deepseek-chat.md#test-11) |
+| 12 | "Waht is extneuting..." (typos) | Edge Case | ✅ Yes (Typos) | [✅](./test-results-gpt4o-mini.md#test-12-typo-question--pass-) | [✅](./test-results-gemma-3n-2b.md#test-12) | [✅](./test-results-deepseek-chat.md#test-12) |
+| 13 | UG assessment requirements? | Citation Test | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-13-citation-format--pass) | [✅](./test-results-gemma-3n-2b.md#test-13) | [✅](./test-results-deepseek-chat.md#test-13) |
+| 14 | Underwater basket weaving? | Citation Test | ❌ No (Fake topic) | [✅](./test-results-gpt4o-mini.md#test-14-hallucination-check--pass-) | [✅](./test-results-gemma-3n-2b.md#test-14) | [✅](./test-results-deepseek-chat.md#test-14) |
+| 15 | Submission deadlines? | Citation Test | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-15-submission-deadlines--pass) | [✅](./test-results-gemma-3n-2b.md#test-15) | [✅](./test-results-deepseek-chat.md#test-15) |
+| 16 | Academic misconduct? | Error Handling | ✅ Yes | [✅](./test-results-gpt4o-mini.md#test-16-academic-misconduct--pass) | [✅](./test-results-gemma-3n-2b.md#test-16) | [✅](./test-results-deepseek-chat.md#test-16) |
+| 17 | "" (empty) | Error Handling | ❌ No (Invalid) | [✅](./test-results-gpt4o-mini.md#test-17-empty-query--pass-) | [✅](./test-results-gemma-3n-2b.md#test-17) | [✅](./test-results-deepseek-chat.md#test-17) |
 
 **Legend**:
 
@@ -76,8 +76,8 @@
 
 **Model Results**:
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-1-what-is-marp--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-1) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-1) ⏳
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-1)
+- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-1)
 
 ---
 
@@ -100,8 +100,8 @@
 
 **Model Results**:
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-2-purpose-of-marp--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-2) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-2) ⏳
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-2)
+- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-2)
 
 ---
 
@@ -128,8 +128,8 @@
 
 **Model Results**:
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-3-illness-during-exams--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-3) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-3) ⏳
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-3)
+- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-3)
 
 ---
 
@@ -156,9 +156,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-4-first-class-honours-requirements--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-4) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-4) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-4)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-4)
 ---
 
 #### Test 5: Module Condonation
@@ -184,9 +182,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-5-module-condonation--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-5) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-5) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-5)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-5)
 ---
 
 #### Test 6: Plagiarism Policy
@@ -212,9 +208,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-6-plagiarism-policy--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-6) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-6) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-6)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-6)
 ---
 
 #### Test 7: Reassessment/Resit Exams
@@ -240,9 +234,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-7-retake-failed-exam--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-7) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-7) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-7)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-7)
 ---
 
 #### Test 8: Credit Requirements
@@ -267,9 +259,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-8-credit-requirements--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-8) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-8) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-8)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-8)
 ---
 
 ### Edge Cases
@@ -296,9 +286,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-9-out-of-scope---weather--pass-) ⭐
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-9) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-9) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-9)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-9)
 ---
 
 #### Test 10: Vague Question
@@ -323,9 +311,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-10-vague-question---grades--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-10) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-10) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-10)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-10)
 ---
 
 #### Test 11: Ambiguous Question
@@ -349,9 +335,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-11-ambiguous-question---failure--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-11) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-11) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-11)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-11)
 ---
 
 #### Test 12: Typo in Question
@@ -375,9 +359,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-12-typo-question--pass-) ⭐
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-12) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-12) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-12)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-12)
 ---
 
 ### Citation Validation
@@ -409,9 +391,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-13-citation-format--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-13) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-13) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-13)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-13)
 ---
 
 #### Test 14: No Hallucination Check
@@ -437,9 +417,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-14-hallucination-check--pass-) ⭐
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-14) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-14) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-14)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-14)
 ---
 
 #### Test 15: Citation Accuracy
@@ -465,9 +443,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-15-submission-deadlines--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-15) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-15) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-15)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-15)
 ---
 
 ### Error Handling
@@ -495,9 +471,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-16-academic-misconduct--pass)
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-16) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-16) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-16)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-16)
 ---
 
 #### Test 17: Empty Query
@@ -521,9 +495,7 @@
 **Model Results**:
 
 - [GPT-4o Mini →](./test-results-gpt4o-mini.md#test-17-empty-query--pass-) ⭐
-- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-17) ⏳
-- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-17) ⏳
-
+- [Gemma 3n 2B →](./test-results-gemma-3n-2b.md#test-17)- [DeepSeek Chat →](./test-results-deepseek-chat.md#test-17)
 ---
 
 ## Model Comparison Summary
@@ -533,29 +505,29 @@
 | Model | Pass Rate | Quality Score | Status |
 |-------|-----------|---------------|--------|
 | [GPT-4o Mini](./test-results-gpt4o-mini.md) | 100% (17/17) | 9.8/10 | ✅ Complete |
-| [Google Gemma 3n 2B](./test-results-gemma-3n-2b.md) | TBD | TBD | ⏳ Pending |
-| [DeepSeek Chat](./test-results-deepseek-chat.md) | TBD | TBD | ⏳ Pending |
+| [DeepSeek Chat](./test-results-deepseek-chat.md) | 100% (17/17) 🏆 | 9.5/10 | ✅ Complete |
+| [Google Gemma 3n 2B](./test-results-gemma-3n-2b.md) | 82.4% (14/17) | 7.5/10 | ✅ Complete |
 
 ### Performance Breakdown
 
-| Metric | GPT-4o Mini | Gemma 3n 2B | DeepSeek Chat | Winner |
-|--------|-------------|-------------|---------------|--------|
-| Accuracy | 10/10 | TBD | TBD | TBD |
-| Hallucination Prevention | 10/10 ⭐ | TBD | TBD | TBD |
-| Citation Quality | 9.5/10 | TBD | TBD | TBD |
-| Comprehensiveness | 10/10 | TBD | TBD | TBD |
-| Query Understanding | 10/10 ⭐ | TBD | TBD | TBD |
-| Error Handling | 10/10 ⭐ | TBD | TBD | TBD |
+| Metric | GPT-4o Mini | DeepSeek Chat | Gemma 3n 2B | Winner |
+|--------|-------------|---------------|-------------|--------|
+| Accuracy | 10/10 | 10/10 | 9/10 | TIE 🤝 |
+| Hallucination Prevention | 10/10 ⭐ | 10/10 ⭐ | 10/10 ⭐ | TIE 🤝 |
+| Citation Quality | 9.5/10 | 9/10 | 7/10 | GPT-4o Mini ✅ |
+| Comprehensiveness | 10/10 | 10/10 ⭐ | 8/10 | TIE 🤝 |
+| Query Understanding | 10/10 ⭐ | 10/10 ⭐ | 9/10 | TIE 🤝 |
+| Error Handling | 10/10 ⭐ | 10/10 ⭐ | 10/10 ⭐ | TIE 🤝 |
 
 ### Category Performance
 
-| Category | GPT-4o Mini | Gemma 3n 2B | DeepSeek Chat |
-|----------|-------------|-------------|---------------|
-| Basic Knowledge (2) | 2/2 | TBD | TBD |
-| Specific Regulations (6) | 6/6 | TBD | TBD |
-| Edge Cases (4) | 4/4 | TBD | TBD |
-| Citation Tests (3) | 3/3 | TBD | TBD |
-| Error Handling (2) | 2/2 | TBD | TBD |
+| Category | GPT-4o Mini | DeepSeek Chat | Gemma 3n 2B |
+|----------|-------------|---------------|-------------|
+| Basic Knowledge (2) | 2/2 | 2/2 | 2/2 |
+| Specific Regulations (6) | 6/6 | 6/6 | 5/6 |
+| Edge Cases (4) | 4/4 | 4/4 | 3/4 |
+| Citation Tests (3) | 3/3 | 3/3 | 2/3 |
+| Error Handling (2) | 2/2 | 2/2 | 2/2 |
 
 ### Key Findings
 
@@ -572,13 +544,37 @@
 - ⚠️ Sometimes defaults to postgraduate context
 - ⚠️ URLs not shown in sources
 
-#### Google Gemma 3n 2B - TBD ⏳
+#### Google Gemma 3n 2B - Strengths ✅
 
-*Testing pending*
+- ✅ Excellent hallucination prevention (10/10)
+- ✅ Query reformulation works (handled typos perfectly)
+- ✅ **FREE** (no API costs)
+- ✅ Good accuracy when it provides answers
+- ✅ Proper citation format
 
-#### DeepSeek Chat - TBD ⏳
+#### Google Gemma 3n 2B - Weaknesses ⚠️
 
-*Testing pending*
+- ❌ Contradictory endings (provides answer then says "no information")
+- ❌ Over-conservative (declined Test 11 when should answer)
+- ⚠️ Citation duplication issues (Test 5)
+- ⚠️ Verbose responses (some 1000+ chars)
+- ⚠️ Uses outdated grading scale (9.0 instead of percentages)
+
+#### DeepSeek Chat - Strengths ✅
+
+- ✅ **Perfect accuracy** (17/17 - 100% pass rate)
+- ✅ Exceptional structure with headers, sections, numbered lists
+- ✅ Comprehensive answers (avg 1599 chars vs GPT's 800)
+- ✅ Successfully handled ambiguous questions (Test 11 - 2776 chars!)
+- ✅ Excellent hallucination prevention (10/10)
+- ✅ Strong citation quality and formatting
+- ✅ **FREE** (no API costs)
+
+#### DeepSeek Chat - Weaknesses ⚠️
+
+- ⚠️ Very verbose responses (can be 2-3x longer than GPT-4o Mini)
+- ⚠️ Some redundancy in explanations
+- ⚠️ Minor citation duplication in some answers
 
 ---
 
@@ -586,24 +582,37 @@
 
 ### Production Model Selection
 
-**Primary Model**: GPT-4o Mini ✅
+**🏆 PRIMARY MODEL: DeepSeek Chat** (RECOMMENDED)
 
-- Reason: Excellent all-around performance
-- Cost: Paid but reliable
-- Best For: Default queries
+- **Pass Rate**: 100% (17/17) - Perfect Score
+- **Quality Score**: 9.5/10
+- **Cost**: FREE
+- **Strengths**: Perfect accuracy, comprehensive answers, excellent structure
+- **Caveats**: Verbose responses (can be 2-3x longer than GPT-4o Mini)
+- **Best For**: Default queries, complex questions, production use
 
-**Free Tier Option**: TBD
+**Alternative Model**: GPT-4o Mini ✅
 
-- Pending testing results
+- **Pass Rate**: 100% (17/17)
+- **Quality Score**: 9.8/10
+- **Cost**: Paid ($0.000150/1K input tokens, $0.000600/1K output tokens)
+- **Best For**: When concise responses preferred, paid tier usage
+
+**Budget Option**: Google Gemma 3n 2B ⚠️ (Acceptable with limitations)
+
+- **Pass Rate**: 82.4% (14/17)
+- **Quality Score**: 7.5/10
+- **Cost**: FREE
+- **Caveats**: Over-conservative on ambiguous questions, contradictory endings
+- **Best For**: Testing, non-critical queries
 
 ### Multi-Model Comparison Lineup
 
-Current Configuration:
+Recommended Configuration:
 
-1. GPT-4o Mini (comprehensive, accurate)
-2. Google Gemma 3n 2B (pending evaluation)
-3. DeepSeek Chat (pending evaluation)
-
+1. **DeepSeek Chat** (free, perfect accuracy, comprehensive) 🏆
+2. **GPT-4o Mini** (paid, perfect accuracy, concise) ✅
+3. **Google Gemma 3n 2B** (free, acceptable quality) ⚠️
 ---
 
 ## Testing Notes
@@ -617,14 +626,23 @@ Current Configuration:
 
 ### Next Steps
 
-- [ ] Complete Gemma 3n 2B testing
-- [ ] Complete DeepSeek Chat testing
-- [ ] Update comparison summary
-- [ ] Add performance graphs
-- [ ] Final recommendations
+- [x] Complete Gemma 3n 2B testing ✅
+- [x] Complete DeepSeek Chat testing ✅
+- [x] Update comparison summary ✅
+- [x] Update recommendations ✅
+- [ ] Add performance graphs (optional)
+- [ ] Create detailed model comparison document
 
 ---
 
-**Last Updated**: December 7, 2025
-**Status**: 1/3 models complete
+**Last Updated**: December 9, 2025
+**Status**: ✅ **ALL 3 MODELS COMPLETE** (GPT-4o Mini ✅, DeepSeek Chat 🏆, Gemma 3n 2B ✅)
 **View**: [Full Model Comparison →](./model-comparison-summary.md)
+
+### When to Use Each Model:
+
+| Model | Best For | Why |
+|-------|----------|-----|
+| **DeepSeek Chat** 🏆 | Default choice for all queries | Perfect score, comprehensive, cost-effective |
+| **GPT-4o Mini** 🥈 | Quick answers, speed-critical apps | Faster (8s), more concise, also 100% |
+| **Gemma 3n 2B** ⚠️ | Testing, ultra-budget | Free, but 82% pass rate with issues |

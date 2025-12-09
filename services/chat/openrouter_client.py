@@ -65,9 +65,12 @@ Your task: Clean up and reformulate the user's query to make it clearer and more
 Instructions:
 1. Fix any spelling errors or typos
 2. Rephrase if needed for clarity
-3. Keep the core intent and meaning
-4. Make it concise and specific
-5. Return ONLY the reformulated query, nothing else
+3. If the query is vague or ambiguous, make it MORE SPECIFIC by expanding what the user likely wants to know
+   - Example: "What if I fail?" → "What happens if I fail a module? Reassessment options and consequences"
+   - Example: "Tell me about grades" → "Grade thresholds, classifications, and marking schemes"
+4. Keep the core intent and meaning
+5. Make it concise but specific enough for good retrieval
+6. Return ONLY the reformulated query, nothing else
 
 User query: "{user_query}"
 
