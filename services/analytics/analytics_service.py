@@ -10,7 +10,8 @@ import sys
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+import requests
+from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel
 
 # Add common module to path
@@ -131,6 +132,25 @@ def handle_model_selected(ch, method, properties, body):
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 
+# Helper function for admin check
+def check_if_admin(authorization: Optional[str]) -> bool:
+    """Check if the user is an admin by validating session with auth service"""
+    if not authorization or not authorization.startswith("Bearer "):
+        return False
+
+    try:
+        auth_url = os.getenv("AUTH_URL", "http://auth:8004")
+        response = requests.get(f"{auth_url}/auth/validate", headers={"Authorization": authorization}, timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("is_admin", False)
+        return False
+    except Exception as e:
+        logger.error(f"Error checking admin status: {e}")
+        return False
+
+
 # API Endpoints
 
 
@@ -140,13 +160,26 @@ def health():
 
 
 @app.get("/analytics/summary", response_model=AnalyticsSummary)
-def get_summary(user_id: str = Query(..., description="User ID for filtering analytics")):
-    """Get analytics summary for a specific user"""
-    # Filter events by user_id
-    user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
-    user_response_events = [e for e in response_events if e["payload"].get("userId") == user_id]
-    user_feedback_events = [e for e in feedback_events if e["payload"].get("userId") == user_id]
-    user_comparison_events = [e for e in model_comparison_events if e["payload"].get("userId") == user_id]
+def get_summary(
+    user_id: Optional[str] = Query(None, description="User ID for filtering analytics"),
+    authorization: Optional[str] = Header(None),
+):
+    """Get analytics summary - shows all data for admin, filtered for regular users"""
+    is_admin = check_if_admin(authorization)
+
+    # If admin, show all data; otherwise filter by user_id
+    if is_admin:
+        user_query_events = query_events
+        user_response_events = response_events
+        user_feedback_events = feedback_events
+        user_comparison_events = model_comparison_events
+    else:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required for non-admin users")
+        user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
+        user_response_events = [e for e in response_events if e["payload"].get("userId") == user_id]
+        user_feedback_events = [e for e in feedback_events if e["payload"].get("userId") == user_id]
+        user_comparison_events = [e for e in model_comparison_events if e["payload"].get("userId") == user_id]
 
     total_queries = len(user_query_events)
     total_responses = len(user_response_events)
@@ -172,12 +205,22 @@ def get_summary(user_id: str = Query(..., description="User ID for filtering ana
 
 
 @app.get("/analytics/popular-queries", response_model=List[PopularQuery])
-def get_popular_queries(user_id: str = Query(..., description="User ID for filtering"), limit: int = Query(10, ge=1, le=100)):
-    """Get most popular queries for a specific user"""
+def get_popular_queries(
+    user_id: Optional[str] = Query(None, description="User ID for filtering"),
+    limit: int = Query(10, ge=1, le=100),
+    authorization: Optional[str] = Header(None),
+):
+    """Get most popular queries - shows all data for admin, filtered for regular users"""
+    is_admin = check_if_admin(authorization)
     query_counts = {}
 
-    # Filter by user_id
-    user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
+    # If admin, use all events; otherwise filter by user_id
+    if is_admin:
+        user_query_events = query_events
+    else:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required for non-admin users")
+        user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
 
     for event in user_query_events:
         query = event["payload"]["query"]
@@ -190,12 +233,20 @@ def get_popular_queries(user_id: str = Query(..., description="User ID for filte
 
 
 @app.get("/analytics/model-stats", response_model=List[ModelStats])
-def get_model_stats(user_id: str = Query(..., description="User ID for filtering")):
-    """Get statistics for each model for a specific user"""
+def get_model_stats(
+    user_id: Optional[str] = Query(None, description="User ID for filtering"), authorization: Optional[str] = Header(None)
+):
+    """Get statistics for each model - shows all data for admin, filtered for regular users"""
+    is_admin = check_if_admin(authorization)
     model_data = {}
 
-    # Filter by user_id
-    user_response_events = [e for e in response_events if e["payload"].get("userId") == user_id]
+    # If admin, use all events; otherwise filter by user_id
+    if is_admin:
+        user_response_events = response_events
+    else:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required for non-admin users")
+        user_response_events = [e for e in response_events if e["payload"].get("userId") == user_id]
 
     for event in user_response_events:
         model_id = event["payload"]["modelId"]
@@ -222,10 +273,22 @@ def get_model_stats(user_id: str = Query(..., description="User ID for filtering
 
 
 @app.get("/analytics/recent-queries")
-def get_recent_queries(user_id: str = Query(..., description="User ID for filtering"), limit: int = Query(10, ge=1, le=100)):
-    """Get recent queries for a specific user"""
-    # Filter by user_id
-    user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
+def get_recent_queries(
+    user_id: Optional[str] = Query(None, description="User ID for filtering"),
+    limit: int = Query(10, ge=1, le=100),
+    authorization: Optional[str] = Header(None),
+):
+    """Get recent queries - shows all data for admin, filtered for regular users"""
+    is_admin = check_if_admin(authorization)
+
+    # If admin, use all events; otherwise filter by user_id
+    if is_admin:
+        user_query_events = query_events
+    else:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required for non-admin users")
+        user_query_events = [e for e in query_events if e["payload"].get("userId") == user_id]
+
     recent = user_query_events[-limit:][::-1]  # Last N in reverse order
     return [
         {

@@ -61,16 +61,32 @@ def init_db():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Create users table
+        # Create users table with is_admin column
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS users (
                 user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 email VARCHAR(255) UNIQUE NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
+                is_admin BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """
+        )
+
+        # Add is_admin column if it doesn't exist (for existing databases)
+        cur.execute(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='users' AND column_name='is_admin'
+                ) THEN
+                    ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE;
+                END IF;
+            END $$;
+            """
         )
 
         # Create password_resets table
@@ -86,7 +102,30 @@ def init_db():
         """
         )
 
+        # Create user_preferences table for model selection
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_preferences (
+                user_id UUID PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+                selected_model VARCHAR(255),
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+        )
+
         conn.commit()
+
+        # Create admin user if it doesn't exist
+        cur.execute("SELECT user_id FROM users WHERE email = %s", ("admin@gmail.com",))
+        if not cur.fetchone():
+            admin_password_hash = hash_password("admin")
+            cur.execute(
+                "INSERT INTO users (email, password_hash, is_admin) VALUES (%s, %s, %s)",
+                ("admin@gmail.com", admin_password_hash, True),
+            )
+            conn.commit()
+            logger.info("✅ Admin user created: admin@gmail.com / admin")
+
         cur.close()
         conn.close()
         logger.info("✅ Database tables initialized")
@@ -122,12 +161,14 @@ class LoginResponse(BaseModel):
     session_token: str
     user_id: str
     email: str
+    is_admin: bool
     expires_at: str
 
 
 class ValidateResponse(BaseModel):
     user_id: str
     email: str
+    is_admin: bool
     valid: bool
 
 
@@ -191,7 +232,7 @@ def login(request: LoginRequest):
         cur = conn.cursor()
 
         # Get user from database
-        cur.execute("SELECT user_id, password_hash FROM users WHERE email = %s", (request.email,))
+        cur.execute("SELECT user_id, password_hash, is_admin FROM users WHERE email = %s", (request.email,))
         result = cur.fetchone()
 
         if not result:
@@ -199,7 +240,7 @@ def login(request: LoginRequest):
             conn.close()
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
-        user_id, password_hash = result
+        user_id, password_hash, is_admin = result
 
         # Verify password
         if not verify_password(request.password, password_hash):
@@ -212,7 +253,7 @@ def login(request: LoginRequest):
 
         # Store session in Redis (24 hour TTL)
         redis_client = get_redis_client()
-        session_data = {"user_id": str(user_id), "email": request.email}
+        session_data = {"user_id": str(user_id), "email": request.email, "is_admin": is_admin}
         redis_client.setex(
             f"session:{session_token}",
             86400,  # 24 hours
@@ -224,11 +265,12 @@ def login(request: LoginRequest):
         cur.close()
         conn.close()
 
-        logger.info(f"✅ User logged in: {request.email}")
+        logger.info(f"✅ User logged in: {request.email} (admin={is_admin})")
         return LoginResponse(
             session_token=session_token,
             user_id=str(user_id),
             email=request.email,
+            is_admin=is_admin,
             expires_at=expires_at,
         )
     except HTTPException:
@@ -286,6 +328,7 @@ def validate_session(authorization: Optional[str] = Header(None)):
         return ValidateResponse(
             user_id=session_dict["user_id"],
             email=session_dict["email"],
+            is_admin=session_dict.get("is_admin", False),
             valid=True,
         )
     except HTTPException:
@@ -293,6 +336,90 @@ def validate_session(authorization: Optional[str] = Header(None)):
     except Exception as e:
         logger.error(f"❌ Validation error: {e}")
         raise HTTPException(status_code=401, detail="Session validation failed")
+
+
+@app.post("/auth/preferences/model")
+def set_model_preference(model_id: str, authorization: Optional[str] = Header(None)):
+    """Set user's preferred model."""
+    try:
+        # Validate session
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+
+        session_token = authorization.replace("Bearer ", "")
+        redis_client = get_redis_client()
+        session_data = redis_client.get(f"session:{session_token}")
+
+        if not session_data:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+        session_dict = json.loads(session_data)
+        user_id = session_dict["user_id"]
+
+        # Update or insert model preference
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            INSERT INTO user_preferences (user_id, selected_model, updated_at)
+            VALUES (%s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id)
+            DO UPDATE SET selected_model = %s, updated_at = CURRENT_TIMESTAMP
+            """,
+            (user_id, model_id, model_id),
+        )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        logger.info(f"✅ Model preference updated for user {user_id}: {model_id}")
+        return {"message": "Model preference saved", "model_id": model_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error saving model preference: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save model preference")
+
+
+@app.get("/auth/preferences/model")
+def get_model_preference(authorization: Optional[str] = Header(None)):
+    """Get user's preferred model."""
+    try:
+        # Validate session
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+
+        session_token = authorization.replace("Bearer ", "")
+        redis_client = get_redis_client()
+        session_data = redis_client.get(f"session:{session_token}")
+
+        if not session_data:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+
+        session_dict = json.loads(session_data)
+        user_id = session_dict["user_id"]
+
+        # Get model preference
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        cur.execute("SELECT selected_model FROM user_preferences WHERE user_id = %s", (user_id,))
+        result = cur.fetchone()
+
+        cur.close()
+        conn.close()
+
+        if result:
+            return {"model_id": result[0]}
+        else:
+            return {"model_id": None}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error getting model preference: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get model preference")
 
 
 @app.get("/health")

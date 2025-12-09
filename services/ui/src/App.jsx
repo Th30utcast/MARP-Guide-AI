@@ -12,6 +12,7 @@ function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [showRegister, setShowRegister] = useState(false)
     const [user, setUser] = useState(null)
+    const [isAdmin, setIsAdmin] = useState(false)
     const [authError, setAuthError] = useState(null)
     const [currentPage, setCurrentPage] = useState('chat')
 
@@ -30,6 +31,7 @@ function App() {
             // Session is valid
             setIsAuthenticated(true)
             setUser({ email: validationResult.email, user_id: validationResult.user_id })
+            setIsAdmin(validationResult.is_admin || false)
           } catch (error) {
             // Session invalid or expired - clear localStorage
             console.log('Session validation failed, clearing stored credentials')
@@ -55,6 +57,7 @@ function App() {
       localStorage.setItem('user_id', response.user_id)
       setIsAuthenticated(true)
       setUser({ email: response.email, user_id: response.user_id })
+      setIsAdmin(response.is_admin || false)
       setAuthError(null)
     }
 
@@ -84,6 +87,7 @@ function App() {
         localStorage.removeItem('queryCount')
         setIsAuthenticated(false)
         setUser(null)
+        setIsAdmin(false)
       }
     }
 
@@ -148,7 +152,7 @@ function App() {
             className="flex-1 overflow-hidden"
             style={{ backgroundColor: 'var(--lancaster-bg)' }}
           >
-            {currentPage === 'chat' ? <ChatContainer /> : <Analytics />}
+            {currentPage === 'chat' ? <ChatContainer /> : <Analytics isAdmin={isAdmin} />}
           </div>
         </div>
       </div>
