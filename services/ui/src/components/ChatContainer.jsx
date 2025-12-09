@@ -2,6 +2,7 @@ import { useChat } from '../hooks/useChat'
 import MessageList from './MessageList'
 import ChatInput from './ChatInput'
 import ModelComparison from './ModelComparison'
+import ModelSelector from './ModelSelector'
 
 function ChatContainer() {
   const {
@@ -10,8 +11,11 @@ function ChatContainer() {
     error,
     comparisonData,
     selectedModel,
+    showModelSelector,
     sendMessage,
     handleModelSelection,
+    handleDirectModelSelection,
+    cancelModelSelection,
     retryLastQuery,
     clearError,
     resetModelSelection
@@ -78,7 +82,12 @@ function ChatContainer() {
         </div>
       )}
 
-      {comparisonData ? (
+      {showModelSelector ? (
+        <ModelSelector
+          onModelSelect={handleDirectModelSelection}
+          onCancel={selectedModel ? cancelModelSelection : null}
+        />
+      ) : comparisonData ? (
         <div className="flex-1 overflow-y-auto">
           <ModelComparison
             comparisonData={comparisonData}
@@ -95,7 +104,7 @@ function ChatContainer() {
         />
       )}
 
-      <ChatInput onSend={sendMessage} disabled={isLoading || !!comparisonData} />
+      <ChatInput onSend={sendMessage} disabled={isLoading || !!comparisonData || showModelSelector} />
     </div>
   )
 }

@@ -11,6 +11,7 @@ RETRIEVAL_URL = os.getenv("RETRIEVAL_URL", "http://retrieval:8002")
 # OpenRouter Configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+PRIMARY_MODEL_ID = OPENROUTER_MODEL  # Alias for analytics events
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # RabbitMQ Configuration

@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 *.log
+.env
 CLAUDE.md
 storage/
 pdfs/

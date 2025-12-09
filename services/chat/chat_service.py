@@ -11,6 +11,7 @@ import logging
 # logging, and custom clients for retrieval and LLM calls.
 import os
 import re
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional
@@ -22,6 +23,11 @@ from prompt_templates import create_rag_prompt
 from pydantic import BaseModel, Field
 from retrieval_client import RetrievalClient
 
+# Add common module to path for event publishing
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+from common import events
+from common.mq import RabbitMQEventBroker
+
 # Sets logging to INFO and creates a logger for this module.
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,6 +38,19 @@ app = FastAPI(title="Chat Service", version="1.0.0")
 # Initialize clients: Creates instances of RetrievalClient and OpenRouterClient for later use.
 retrieval_client = RetrievalClient()
 openrouter_client = OpenRouterClient()
+
+# Initialize event broker for analytics
+try:
+    event_broker = RabbitMQEventBroker(
+        host=os.getenv("RABBITMQ_HOST", "rabbitmq"),
+        port=int(os.getenv("RABBITMQ_PORT", "5672")),
+        username=os.getenv("RABBITMQ_USER", "guest"),
+        password=os.getenv("RABBITMQ_PASS", "guest"),
+    )
+    logger.info("✅ Event broker initialized for analytics")
+except Exception as e:
+    logger.warning(f"⚠️ Failed to initialize event broker: {e}. Analytics events will not be published.")
+    event_broker = None
 
 # Schemas:
 
@@ -47,6 +66,8 @@ class Citation(BaseModel):
 class ChatRequest(BaseModel):
     query: str = Field(..., description="User's question about MARP")
     top_k: int = Field(8, ge=1, le=20, description="Number of chunks to retrieve")
+    session_id: Optional[str] = Field(None, description="User session ID for analytics")
+    model_id: Optional[str] = Field(None, description="Model ID to use for generation (defaults to PRIMARY_MODEL_ID)")
 
 
 # Defines the response model: query, answer, and a list of citations.
@@ -92,6 +113,30 @@ def chat(req: ChatRequest):
     """
     start_time = time.time()
 
+    # Generate session ID if not provided
+    session_id = req.session_id or events.generate_event_id()
+    correlation_id = events.generate_event_id()
+
+    # Use model_id from request or fall back to PRIMARY_MODEL_ID
+    model_id = req.model_id or config.PRIMARY_MODEL_ID
+
+    # Publish QuerySubmitted event
+    if event_broker:
+        try:
+            query_event = events.create_query_submitted_event(
+                query=req.query,
+                user_session_id=session_id,
+                model_id=model_id,
+                correlation_id=correlation_id,
+            )
+            event_broker.publish(
+                routing_key=events.ROUTING_KEY_QUERY_SUBMITTED,
+                message=json.dumps(query_event),
+                exchange="events",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to publish QuerySubmitted event: {e}")
+
     try:
         # (Step 0 - Query Reformulation): Clean up query to fix typos and improve phrasing
         search_query = req.query
@@ -122,8 +167,14 @@ def chat(req: ChatRequest):
         prompt = create_rag_prompt(req.query, chunks)
 
         # (Step 3 - Generation): Sends the prompt to the LLM via OpenRouter to generate the answer.
-        logger.info("🤖 Step 3: Generating answer with LLM")
-        answer = openrouter_client.generate_answer(prompt)
+        logger.info(f"🤖 Step 3: Generating answer with LLM (model: {model_id})")
+        # Use specified model or default client
+        if model_id != config.PRIMARY_MODEL_ID:
+            # Create a temporary client with the specified model
+            model_client = OpenRouterClient(model=model_id)
+            answer = model_client.generate_answer(prompt)
+        else:
+            answer = openrouter_client.generate_answer(prompt)
 
         # (Step 4 - Citation extraction): Extracts only citations that were actually referenced
         # in the answer by looking for inline citation markers like [1], [2], etc.
@@ -234,6 +285,27 @@ def chat(req: ChatRequest):
         latency = round((time.time() - start_time) * 1000, 2)
         logger.info(f"✅ Chat completed in {latency}ms | Citations: {len(citations)}")
 
+        # Publish ResponseGenerated event
+        if event_broker:
+            try:
+                response_event = events.create_response_generated_event(
+                    query=req.query,
+                    response=answer,
+                    model_id=model_id,
+                    user_session_id=session_id,
+                    latency_ms=latency,
+                    citation_count=len(citations),
+                    retrieval_count=len(chunks) if chunks else 0,
+                    correlation_id=correlation_id,
+                )
+                event_broker.publish(
+                    routing_key=events.ROUTING_KEY_RESPONSE_GENERATED,
+                    message=json.dumps(response_event),
+                    exchange="events",
+                )
+            except Exception as e:
+                logger.warning(f"Failed to publish ResponseGenerated event: {e}")
+
         # (Success response): Returns the ChatResponse with the query, generated answer, and citations.
         return ChatResponse(query=req.query, answer=answer, citations=citations)
 
@@ -251,6 +323,27 @@ def compare_models(req: ChatRequest):
     Generates answers from 3 free models in parallel for user selection
     """
     start_time = time.time()
+
+    # Generate session ID if not provided
+    session_id = req.session_id or events.generate_event_id()
+    correlation_id = events.generate_event_id()
+
+    # Publish ModelComparisonTriggered event
+    if event_broker:
+        try:
+            comparison_event = events.create_model_comparison_triggered_event(
+                query=req.query,
+                user_session_id=session_id,
+                models=[m["id"] for m in config.COMPARISON_MODELS],
+                correlation_id=correlation_id,
+            )
+            event_broker.publish(
+                routing_key=events.ROUTING_KEY_MODEL_COMPARISON_TRIGGERED,
+                message=json.dumps(comparison_event),
+                exchange="events",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to publish ModelComparisonTriggered event: {e}")
 
     try:
         # Step 0: Query Reformulation (once, shared by all models)

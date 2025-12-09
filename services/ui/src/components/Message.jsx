@@ -68,8 +68,15 @@ function Message({ message }) {
           <ReactMarkdown
             components={{
               p: ({ children }) => {
-                // Convert children to string and style citation numbers
-                const text = String(children)
+                // Extract text from children (handles strings, arrays, and nested elements)
+                const extractText = (child) => {
+                  if (typeof child === 'string') return child
+                  if (Array.isArray(child)) return child.map(extractText).join('')
+                  if (child?.props?.children) return extractText(child.props.children)
+                  return ''
+                }
+
+                const text = extractText(children)
                 // Replace [1], [2], etc. with italic styled versions
                 const styledText = text.replace(/\[(\d+)\]/g, (match) => {
                   return `<i style="font-weight: 600; opacity: 0.9;">${match}</i>`

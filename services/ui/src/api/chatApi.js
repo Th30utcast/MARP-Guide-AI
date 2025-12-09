@@ -11,11 +11,15 @@ class ChatApiError extends Error {
   }
 }
 
-export async function sendChatQuery(query) {
+export async function sendChatQuery(query, modelId = null) {
   try {
+    const payload = { query }
+    if (modelId) {
+      payload.model_id = modelId
+    }
     const response = await axios.post(
       CHAT_API_URL,
-      { query },
+      payload,
       { timeout: TIMEOUT }
     )
     return response.data
