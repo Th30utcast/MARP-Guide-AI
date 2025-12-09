@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { sendChatQuery, sendComparisonQuery } from '../api/chatApi'
+import { sendChatQuery, sendComparisonQuery, recordModelSelection } from '../api/chatApi'
 
 export function useChat() {
   const [messages, setMessages] = useState(() => {
@@ -75,7 +75,7 @@ export function useChat() {
     }
   }
 
-  const handleModelSelection = (modelId) => {
+  const handleModelSelection = async (modelId) => {
     // Save selection to state and localStorage
     setSelectedModel(modelId)
     localStorage.setItem('selectedModel', modelId)
@@ -88,6 +88,21 @@ export function useChat() {
     const selectedResult = comparisonData.results.find(r => r.model_id === modelId)
 
     if (selectedResult) {
+      // Record the model selection in analytics
+      try {
+        await recordModelSelection({
+          query: comparisonData.query,
+          model_id: selectedResult.model_id,
+          answer: selectedResult.answer,
+          citation_count: selectedResult.citations?.length || 0,
+          retrieval_count: comparisonData.retrieval_count,
+          latency_ms: comparisonData.latency_ms
+        })
+      } catch (error) {
+        console.error('Failed to record model selection:', error)
+        // Continue anyway - analytics failure shouldn't block the user
+      }
+
       // Add the selected model's answer as assistant message
       const assistantMessage = {
         role: 'assistant',

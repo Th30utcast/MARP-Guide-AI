@@ -85,3 +85,28 @@ export async function sendComparisonQuery(query) {
     )
   }
 }
+
+export async function recordModelSelection(selectionData) {
+  try {
+    // Get session token for authentication
+    const token = localStorage.getItem('session_token')
+    const headers = {}
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
+    const response = await axios.post(
+      '/api/chat/comparison/select',
+      selectionData,
+      {
+        timeout: 5000,
+        headers
+      }
+    )
+    return response.data
+  } catch (error) {
+    // Don't throw errors for analytics recording - just log it
+    console.error('Failed to record model selection:', error)
+    return { status: 'error' }
+  }
+}

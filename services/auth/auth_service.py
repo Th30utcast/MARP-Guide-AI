@@ -116,15 +116,15 @@ def init_db():
         conn.commit()
 
         # Create admin user if it doesn't exist
-        cur.execute("SELECT user_id FROM users WHERE email = %s", ("admin@gmail.com",))
+        cur.execute("SELECT user_id FROM users WHERE email = %s", ("admin@example.com",))
         if not cur.fetchone():
             admin_password_hash = hash_password("admin")
             cur.execute(
                 "INSERT INTO users (email, password_hash, is_admin) VALUES (%s, %s, %s)",
-                ("admin@gmail.com", admin_password_hash, True),
+                ("admin@example.com", admin_password_hash, True),
             )
             conn.commit()
-            logger.info("✅ Admin user created: admin@gmail.com / admin")
+            logger.info("✅ Admin user created: admin@example.com / admin")
 
         cur.close()
         conn.close()

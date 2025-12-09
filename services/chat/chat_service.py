@@ -124,6 +124,8 @@ class ComparisonResponse(BaseModel):
     query: str
     reformulated_query: str
     results: List[ModelComparisonResult]
+    latency_ms: float  # Latency for the comparison request
+    retrieval_count: int  # Number of chunks retrieved
 
 
 # Health check
@@ -558,8 +560,91 @@ def compare_models(req: ChatRequest, user: Dict = Depends(validate_session)):
         latency = round((time.time() - start_time) * 1000, 2)
         logger.info(f"✅ Multi-model comparison completed in {latency}ms")
 
-        return ComparisonResponse(query=req.query, reformulated_query=search_query, results=results)
+        # Note: Analytics events will be published when user selects a model
+        # via the /chat/comparison/select endpoint
+
+        return ComparisonResponse(
+            query=req.query,
+            reformulated_query=search_query,
+            results=results,
+            latency_ms=latency,
+            retrieval_count=len(chunks) if chunks else 0,
+        )
 
     except Exception as e:
         logger.error(f"❌ Error in compare_models endpoint: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to compare models: {str(e)}")
+
+
+# Model selection tracking endpoint
+class ModelSelectionRequest(BaseModel):
+    query: str
+    model_id: str
+    answer: str
+    citation_count: int
+    retrieval_count: int
+    latency_ms: float
+    session_id: Optional[str] = None
+
+
+@app.post("/chat/comparison/select")
+def record_model_selection(req: ModelSelectionRequest, user: Dict = Depends(validate_session)):
+    """
+    Records analytics events when user selects a model from comparison (requires authentication)
+    This ensures only the selected model is tracked in analytics
+    """
+    try:
+        user_id = user["user_id"]
+        session_id = req.session_id or events.generate_event_id()
+        correlation_id = events.generate_event_id()
+
+        logger.info(f"📊 User {user_id} selected model {req.model_id} from comparison")
+
+        # Publish QuerySubmitted event for the selected model only
+        if event_broker:
+            try:
+                query_event = events.create_query_submitted_event(
+                    query=req.query,
+                    user_session_id=session_id,
+                    model_id=req.model_id,
+                    user_id=user_id,
+                    correlation_id=correlation_id,
+                )
+                event_broker.publish(
+                    routing_key=events.ROUTING_KEY_QUERY_SUBMITTED,
+                    message=json.dumps(query_event),
+                    exchange="events",
+                )
+
+                # Publish ResponseGenerated event for the selected model only
+                response_event = events.create_response_generated_event(
+                    query=req.query,
+                    response=req.answer,
+                    model_id=req.model_id,
+                    user_session_id=session_id,
+                    latency_ms=req.latency_ms,
+                    citation_count=req.citation_count,
+                    retrieval_count=req.retrieval_count,
+                    user_id=user_id,
+                    correlation_id=correlation_id,
+                )
+                event_broker.publish(
+                    routing_key=events.ROUTING_KEY_RESPONSE_GENERATED,
+                    message=json.dumps(response_event),
+                    exchange="events",
+                )
+
+                logger.info(f"✅ Published analytics events for selected model {req.model_id}")
+                return {"status": "ok", "message": "Selection recorded"}
+            except Exception as e:
+                logger.warning(f"Failed to publish analytics events: {e}")
+                raise HTTPException(status_code=500, detail="Failed to record selection")
+        else:
+            logger.warning("Event broker not available - selection not recorded")
+            return {"status": "ok", "message": "Selection recorded (broker unavailable)"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error recording model selection: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to record selection: {str(e)}")
