@@ -6,18 +6,18 @@ flowchart TB
     MARP[Lancaster MARP Website]
   end
 
-  subgraph Ingestion["Ingestion Service (FastAPI)"]
-    IG[FastAPI App<br/>]
-    Scraper[Web Scraper<br/>]
+  subgraph Ingestion["Ingestion Service (FastAPI) - Port 8001"]
+    IG[FastAPI App<br/>REST API]
+    Scraper[Web Scraper<br/>BeautifulSoup]
     Fetcher[PDF Fetcher<br/>Downloads PDFs]
   end
 
   subgraph Storage["Shared Storage (Docker Volumes)"]
-    PDFs[(PDFs Directory<br/>)]
-    Events[(Event-Sourced Data<br/>)]
+    PDFs[(PDFs Directory<br/>Downloaded Files)]
+    Events[(Event-Sourced Data<br/>storage/extracted/)]
   end
 
-  subgraph Broker["Event Broker (RabbitMQ)"]
+  subgraph Broker["Event Broker (RabbitMQ) - Port 5672"]
     Exchange{events<br/>topic exchange}
     Q1([documents.discovered])
     Q2([documents.extracted])
@@ -29,92 +29,106 @@ flowchart TB
   end
 
   subgraph Extraction["Extraction Service (Worker)"]
-    EW[RabbitMQ Consumer<br/>]
-    ES[Extraction Service<br/>]
+    EW[RabbitMQ Consumer<br/>documents.discovered]
+    ES[Extraction Service<br/>pdfplumber]
   end
 
   subgraph Indexing["Indexing Service (Worker)"]
-    IW[RabbitMQ Consumer<br/>]
-    IS[Indexing Service<br/>]
+    IW[RabbitMQ Consumer<br/>documents.extracted]
+    IS[Indexing Service<br/>sentence-transformers]
   end
 
-  subgraph Retrieval["Retrieval Service (FastAPI)"]
+  subgraph Retrieval["Retrieval Service (FastAPI) - Port 8002"]
     RA[FastAPI App<br/>REST API]
-    RW[RabbitMQ Consumer<br/>Event Monitor]
-    RS[Retrieval Service<br/>Semantic Search]
+    RS[Retrieval Service<br/>Semantic Search<br/>all-MiniLM-L6-v2]
   end
 
-  subgraph Chat["Chat Service (FastAPI)"]
-    CA[FastAPI App<br/>REST API]
+  subgraph Chat["Chat Service (FastAPI) - Port 8003"]
+    CA[FastAPI App<br/>REST API + Auth]
     RC[Retrieval Client<br/>HTTP]
-    OR[OpenRouter Client<br/>LLM API]
+    OR[OpenRouter Client<br/>Multi-Model Support]
+    MP[Event Publisher<br/>Analytics Events]
   end
 
-  subgraph VectorDB["Qdrant Vector Database"]
-    VDB[(marp-documents<br/>)]
+  subgraph VectorDB["Qdrant Vector Database - Port 6333"]
+    VDB[(marp-documents<br/>384-dim vectors<br/>cosine similarity)]
   end
 
-  subgraph LLM["External LLM"]
-    OpenRouter[OpenRouter API<br/>GPT-4o Mini default]
+  subgraph LLM["External LLM Provider"]
+    OpenRouter[OpenRouter API<br/>GPT-4o Mini<br/>Gemma 3n 2B<br/>DeepSeek Chat]
   end
 
-  subgraph Auth["Auth Service (FastAPI)"]
+  subgraph Auth["Auth Service (FastAPI) - Port 8004"]
     AA[FastAPI App<br/>REST API]
-    ADB[(PostgreSQL<br/>Users)]
-    ARD[(Redis<br/>Sessions)]
+    ADB[(PostgreSQL<br/>Users & Preferences)]
+    ARD[(Redis<br/>Session Tokens<br/>24h TTL)]
   end
 
-  subgraph Analytics["Analytics Service (FastAPI)"]
+  subgraph Analytics["Analytics Service (FastAPI) - Port 8005"]
     AN[FastAPI App<br/>REST API]
-    AW[RabbitMQ Consumer<br/>Event Tracker]
+    AW[RabbitMQ Consumer<br/>Analytics Events]
+    AS[Analytics Store<br/>In-Memory]
   end
 
-  subgraph UI["Web UI (React)"]
-    WebUI[React App<br/>Vite + Tailwind]
+  subgraph UI["Web UI (React) - Port 8080"]
+    WebUI[React App<br/>Vite + Tailwind<br/>Nginx Server]
   end
 
+  %% Data Pipeline Flow
   MARP -->|HTTP GET| Scraper
   Scraper --> Fetcher
   Fetcher --> PDFs
   Fetcher --> Events
-  IG -->|publish| Exchange
+  IG -->|publish DocumentDiscovered| Exchange
   Exchange --> Q1
   Q1 -->|consume| EW
   EW --> ES
   ES --> PDFs
   ES --> Events
-  ES -->|publish| Exchange
+  ES -->|publish DocumentExtracted| Exchange
   Exchange --> Q2
   Q2 -->|consume| IW
   IW --> IS
   IS --> Events
   IS -->|store vectors| VDB
-  IS -->|publish| Exchange
+  IS -->|publish ChunksIndexed| Exchange
   Exchange --> Q3
-  Q4 -->|consume| RW
-  RW --> RS
-  RA -->|search| VDB
-  RA -->|publish| Exchange
-  Exchange --> Q4
 
-  CA -->|HTTP POST /search| RA
-  RA -->|search results| CA
-  CA -->|HTTP POST| OpenRouter
-  OpenRouter -->|generated answer| CA
-  CA -->|publish analytics| Exchange
+  %% Retrieval Flow
+  RA -->|vector search| VDB
+  RS --> RA
+
+  %% Chat Flow
+  WebUI -->|POST /chat or /chat/compare<br/>Bearer token| CA
+  CA -->|validate session<br/>GET /auth/validate| AA
+  AA --> ARD
+  CA --> RC
+  RC -->|POST /search| RA
+  RA -->|search results| RC
+  RC --> CA
+  CA --> OR
+  OR -->|HTTP POST| OpenRouter
+  OpenRouter -->|generated answer| OR
+  OR --> CA
+  CA --> MP
+  MP -->|publish events| Exchange
   Exchange --> Q5
   Exchange --> Q6
   Exchange --> Q7
+
+  %% Analytics Flow
   Q5 -->|consume| AW
   Q6 -->|consume| AW
   Q7 -->|consume| AW
-  AW --> AN
+  AW --> AS
+  AS --> AN
+  WebUI -->|GET /analytics/*<br/>Bearer token| AN
+  AN -->|validate session| AA
 
-  WebUI -->|HTTP POST| AA
+  %% Auth Flow
+  WebUI -->|POST /register, /login, /logout| AA
   AA --> ADB
   AA --> ARD
-  WebUI -->|HTTP POST /chat| CA
-  CA -->|validate session| AA
 
   style Ingestion fill:#00A310
   style Extraction fill:#00A310
@@ -128,6 +142,7 @@ flowchart TB
   style Storage fill:#003BD1
   style VectorDB fill:#003BD1
   style LLM fill:#D17800
+  style External fill:#E0E0E0
 ```
 
 ## Legend

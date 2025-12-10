@@ -60,59 +60,69 @@ graph TB
   end
 
   subgraph Presentation["Presentation Layer"]
-    WebUI[Web UI<br/>]
-    Auth[Authentication Service<br/>]
+    WebUI[Web UI<br/>React + Vite]
+    Auth[Authentication Service<br/>FastAPI]
   end
 
   subgraph Application["Application Layer"]
-    Chat[Chat Service<br/>]
-    Retrieval[Retrieval Service<br/>]
-    MultiModel[Multi-Model Comparison<br/>]
+    Chat[Chat Service<br/>RAG + Multi-Model]
+    Retrieval[Retrieval Service<br/>Semantic Search]
+    Analytics[Analytics Service<br/>Usage Tracking]
   end
 
   subgraph DataProcessing["Data Processing Layer"]
-    Ingestion[Ingestion Service<br/>]
-    Extraction[Extraction Service<br/>]
-    Indexing[Indexing Service<br/>]
+    Ingestion[Ingestion Service<br/>PDF Discovery]
+    Extraction[Extraction Service<br/>Text Extraction]
+    Indexing[Indexing Service<br/>Embeddings]
   end
 
   subgraph Infrastructure["Infrastructure Layer"]
-    Message-Broker[Message Broker<br/>]
-    Vector-Database[(Vector Database<br/>)]
-    Storage[(File Storage<br/>)]
-    Database[(Database<br/>)]
+    RabbitMQ[RabbitMQ<br/>Message Broker]
+    Qdrant[(Qdrant<br/>Vector Database)]
+    Storage[(File Storage<br/>PDFs + Events)]
+    PostgreSQL[(PostgreSQL<br/>User Data)]
+    Redis[(Redis<br/>Sessions)]
   end
 
   subgraph External["External Systems"]
-    MARP[Lancaster MARP<br/>]
-    LLMs[LLM APIs<br/>]
+    MARP[Lancaster MARP<br/>Website]
+    OpenRouter[OpenRouter API<br/>LLM Provider]
   end
 
   %% User interactions
   Student --> WebUI
   Staff --> WebUI
   WebUI --> Auth
-  Auth -->Database
+  WebUI --> Chat
+  WebUI --> Analytics
+
+  %% Auth connections
+  Auth --> PostgreSQL
+  Auth --> Redis
 
   %% Application layer flows
-  WebUI --> Chat
-  Chat --> MultiModel
   Chat --> Retrieval
-  MultiModel --> LLMs
-  Retrieval --> Vector-Database
+  Chat --> OpenRouter
+  Chat --> Auth
+  Chat --> RabbitMQ
+  Analytics --> RabbitMQ
+  Retrieval --> Qdrant
 
-  %% Data processing pipeline (operational)
+  %% Data processing pipeline
   MARP -->|Scrape PDFs| Ingestion
-  Ingestion -->|DocumentDiscovered| Message-Broker
-  Message-Broker -->|Event| Extraction
-  Extraction -->|DocumentExtracted| Message-Broker
-  Message-Broker -->|Event| Indexing
-  Indexing -->|Store Vectors| Vector-Database
+  Ingestion -->|DocumentDiscovered| RabbitMQ
+  RabbitMQ -->|Event| Extraction
+  Extraction -->|DocumentExtracted| RabbitMQ
+  RabbitMQ -->|Event| Indexing
+  Indexing -->|Store Vectors| Qdrant
 
   %% Storage connections
   Ingestion --> Storage
   Extraction --> Storage
   Indexing --> Storage
+
+  %% Analytics tracking
+  RabbitMQ -.->|Analytics Events| Analytics
 
   %% Styling
   style DataProcessing fill:#00A310,stroke:#333,stroke-width:2px
@@ -140,9 +150,9 @@ graph TB
 **Application Services:**
 4. **Retrieval Service** - REST API for semantic search over indexed documents
 5. **Chat Service** - RAG-powered question answering with LLM integration and multi-model comparison
-6. **Authentication Service** - User registration, login, and session management
-7. **Analytics Service** - Tracks user interactions and provides usage insights
-8. **Web UI** - React-based frontend for chat interaction
+6. **Authentication Service** - User registration, login, session management, and admin account (`admin@example.com`)
+7. **Analytics Service** - Tracks user interactions and provides usage insights (global for admins, personal for users)
+8. **Web UI** - React-based frontend for chat interaction and analytics dashboard
 
 **Infrastructure:**
 9. **Qdrant** - Vector database for semantic search (384-dimensional embeddings)
@@ -164,11 +174,14 @@ User → Auth (validate) → Chat → Retrieval → LLM (OpenRouter) → User
                               Analytics (tracking)
 ```
 
-For detailed architecture diagrams, see:
+For detailed architecture diagrams and service documentation, see:
 
-- [Ingestion Pipeline](docs/services/Ingestion/Ingestion_pipeline.md)
-- [Microservices & Broker](docs/services/Microservices_Broker.md)
-- [Event Catalogue](docs/events/event-catalogue.md)
+- [Microservices & Broker](docs/services/Microservices_Broker.md) - Complete system architecture
+- [Ingestion Pipeline](docs/services/Ingestion/Ingestion_pipeline.md) - PDF discovery flow
+- [Authentication Pipeline](docs/services/Auth/Auth_pipeline.md) - User auth flows
+- [Multi-Model Pipeline](docs/services/MultiModel/MultiModel_pipeline.md) - Comparison flow
+- [Web UI Pipeline](docs/services/UI/UI_pipeline.md) - Frontend interaction flows
+- [Event Catalogue](docs/events/event-catalogue.md) - All system events
 
 ---
 
@@ -260,7 +273,11 @@ The **easiest way** to use the system:
    - First query: Get a single LLM answer with citations
    - Second query: Automatic multi-model comparison (3 models side-by-side)
    - Select your preferred answer to help improve the system
-5. **View analytics**: Check usage statistics and popular queries
+5. **View analytics**:
+   - Navigate to Analytics page from sidebar
+   - Regular users see their personal query history and statistics
+   - Admin users see global analytics across all users
+   - **Admin Login**: `admin@example.com` / `admin` (created automatically on startup)
 
 #### API Testing (For Developers)
 
@@ -269,7 +286,7 @@ The **easiest way** to use the system:
 **Step 1: Register a user**
 
 ```bash
-curl -X POST http://localhost:8004/register \
+curl -X POST http://localhost:8004/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com", "password": "testpass123"}'
 ```
@@ -277,12 +294,12 @@ curl -X POST http://localhost:8004/register \
 **Step 2: Login and get token**
 
 ```bash
-curl -X POST http://localhost:8004/login \
+curl -X POST http://localhost:8004/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com", "password": "testpass123"}'
 ```
 
-Response: `{"token": "your-session-token-here"}`
+Response: `{"session_token": "your-session-token-here", "user_id": "...", "email": "test@example.com", "is_admin": false}`
 
 **Step 3: Chat with token**
 
@@ -341,11 +358,18 @@ docker compose down -v
 
 - **URL**: <http://localhost:8004>
 - **Interactive Docs**: <http://localhost:8004/docs>
+- **Default Admin Account**:
+  - Email: `admin@example.com`
+  - Password: `admin`
+  - Created automatically on service startup
+  - Admin users can view global analytics and access all features
 - **Endpoints**:
-  - `POST /register` - Create new user account
-  - `POST /login` - Get session token (24h expiry)
-  - `POST /validate-session` - Verify Bearer token
-  - `POST /password-reset` - Reset user password
+  - `POST /auth/register` - Create new user account
+  - `POST /auth/login` - Get session token (24h expiry)
+  - `POST /auth/logout` - Invalidate session token
+  - `GET /auth/validate` - Verify Bearer token (internal use)
+  - `GET /auth/preferences/model` - Get user's preferred LLM model
+  - `POST /auth/preferences/model` - Set user's preferred LLM model
 
 ### Chat Service API
 
@@ -361,11 +385,20 @@ docker compose down -v
 
 - **URL**: <http://localhost:8005>
 - **Interactive Docs**: <http://localhost:8005/docs>
+- **Authentication**: All endpoints require `Authorization: Bearer <token>` header
+- **Access Control**:
+  - **Admin Users** (`admin@example.com`): View global analytics across all users
+  - **Regular Users**: View only their personal query history and statistics
 - **Endpoints**:
   - `GET /analytics/summary` - Overall usage statistics
-  - `GET /analytics/queries/popular` - Most common queries
-  - `GET /analytics/models/stats` - Per-model performance metrics
-  - `GET /analytics/users/{user_id}/history` - User query history
+    - Admins: Total queries, average latency, and metrics across all users
+    - Users: Personal query count, average latency for their queries
+  - `GET /analytics/popular-queries` - Most frequently asked questions
+    - Admins: Popular queries across all users
+    - Users: User's own query history
+  - `GET /analytics/model-stats` - Per-model performance metrics (admins only)
+  - `GET /analytics/recent-queries` - Recent queries with timestamps
+  - `POST /analytics/reset` - Reset all analytics data (admin only, testing purposes)
 
 ### Retrieval Service API
 
@@ -378,11 +411,9 @@ docker compose down -v
 ### Ingestion Service
 
 - **URL**: <http://localhost:8001>
-- **Interactive Docs**: <http://localhost:8001/docs>
+- **Type**: Worker service (runs once at startup, not a REST API)
 - **Endpoints**:
-  - `GET /health` - Health check
-  - `GET /stats` - Ingestion statistics
-  - `POST /ingest` - Manually trigger PDF discovery
+  - `GET /health` - Health check (RabbitMQ connection status)
 
 ### Infrastructure UIs
 
@@ -403,9 +434,11 @@ docker compose down -v
 #### PostgreSQL Database
 
 - **Host**: `localhost:5432`
-- **Database**: `marp_auth`
-- **User**: `postgres`
-- **Schema**: Users table with bcrypt password hashing
+- **Database**: `marp_db`
+- **User**: `marp_user`
+- **Tables**:
+  - `users` - User accounts with bcrypt password hashing
+  - `user_preferences` - User's preferred LLM model settings
 
 #### Redis Cache
 
@@ -481,8 +514,12 @@ MARP-Guide-AI/
 │   └── ui/                     # React web interface
 │       ├── src/
 │       │   ├── components/     # React components
-│       │   ├── services/       # API clients
-│       │   └── App.jsx         # Main app component
+│       │   ├── api/            # API clients
+│       │   ├── hooks/          # Custom React hooks
+│       │   ├── App.jsx         # Main app component
+│       │   └── index.css       # Global styles
+│       ├── Dockerfile          # Multi-stage build
+│       ├── nginx.conf          # Nginx configuration
 │       ├── package.json
 │       └── vite.config.js
 ├── common/                     # Shared modules
@@ -781,16 +818,17 @@ docker compose logs ingestion
 
 ### Python Services
 
-| Technology | Version | Purpose                     |
-| ---------- | ------- | --------------------------- |
-| Python     | 3.11    | Programming language        |
-| FastAPI    | 0.104.1 | Web framework for REST APIs |
-| Uvicorn    | 0.24.0  | ASGI server                 |
-| Pydantic   | 2.0+    | Data validation             |
-| Pika       | 1.3.2   | RabbitMQ client             |
-| psycopg2   | Latest  | PostgreSQL adapter          |
-| redis      | Latest  | Redis client                |
-| bcrypt     | Latest  | Password hashing            |
+| Technology      | Version | Purpose                     |
+| --------------- | ------- | --------------------------- |
+| Python          | 3.11    | Programming language        |
+| FastAPI         | 0.104.1 | Web framework for REST APIs |
+| Uvicorn         | 0.24.0  | ASGI server                 |
+| Starlette       | 0.27.0  | ASGI framework              |
+| Pydantic        | 2.0+    | Data validation             |
+| Pika            | 1.3.2   | RabbitMQ client             |
+| psycopg2-binary | Latest  | PostgreSQL adapter          |
+| redis           | Latest  | Redis client                |
+| bcrypt          | Latest  | Password hashing            |
 
 ### Data Processing
 
@@ -800,8 +838,11 @@ docker compose logs ingestion
 | qdrant-client         | 1.7.0   | Qdrant Python client |
 | pdfplumber            | 0.10.3  | PDF text extraction  |
 | BeautifulSoup4        | 4.12.2  | HTML parsing         |
-| httpx                 | Latest  | Async HTTP client    |
+| lxml                  | 5.0.0+  | XML/HTML parser      |
+| httpx                 | 0.25.2  | Async HTTP client    |
+| requests              | 2.31.0  | HTTP client          |
 | numpy                 | 1.24.3  | Numerical computing  |
+| openai                | Latest  | OpenAI SDK client    |
 
 ### AI/ML Models
 
@@ -813,20 +854,34 @@ docker compose logs ingestion
 
 ### Frontend
 
-| Technology | Version | Purpose               |
-| ---------- | ------- | --------------------- |
-| React      | 18.2.0  | UI framework          |
-| Vite       | Latest  | Build tool            |
-| Tailwind   | Latest  | CSS framework         |
-| Axios      | Latest  | HTTP client           |
+| Technology            | Version | Purpose                    |
+| --------------------- | ------- | -------------------------- |
+| React                 | 18.2.0  | UI framework               |
+| React DOM             | 18.2.0  | React rendering            |
+| Vite                  | 5.0.0   | Build tool & dev server    |
+| Tailwind CSS          | 3.3.6   | Utility-first CSS          |
+| PostCSS               | 8.4.32  | CSS processing             |
+| Autoprefixer          | 10.4.16 | CSS vendor prefixing       |
+| Axios                 | 1.6.0   | HTTP client                |
+| react-markdown        | 9.0.0   | Markdown rendering         |
+| prop-types            | 15.8.1  | React prop validation      |
+| @vitejs/plugin-react  | 4.2.0   | Vite React plugin          |
+| Nginx                 | Alpine  | Production static server   |
 
 ### Development Tools
 
-- **pytest**: Testing framework with coverage
-- **black**: Code formatter (line length: 127)
-- **isort**: Import sorter
-- **flake8**: Linter for code quality
-- **GitHub Actions**: CI/CD pipeline
+| Tool           | Version | Purpose                   |
+| -------------- | ------- | ------------------------- |
+| pytest         | 7.4.3   | Testing framework         |
+| pytest-cov     | 4.1.0   | Coverage plugin           |
+| pytest-mock    | 3.12.0  | Mocking support           |
+| pytest-asyncio | 0.21.1  | Async test support        |
+| responses      | 0.24.1  | HTTP request mocking      |
+| black          | 23.11.0 | Code formatter            |
+| isort          | Latest  | Import sorter             |
+| flake8         | 6.1.0   | Linter for code quality   |
+| pre-commit     | Latest  | Git hooks for formatting  |
+| GitHub Actions | N/A     | CI/CD pipeline            |
 
 ---
 
