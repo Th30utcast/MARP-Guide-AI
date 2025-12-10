@@ -150,9 +150,9 @@ graph TB
 **Application Services:**
 4. **Retrieval Service** - REST API for semantic search over indexed documents
 5. **Chat Service** - RAG-powered question answering with LLM integration and multi-model comparison
-6. **Authentication Service** - User registration, login, and session management
-7. **Analytics Service** - Tracks user interactions and provides usage insights
-8. **Web UI** - React-based frontend for chat interaction
+6. **Authentication Service** - User registration, login, session management, and admin account (`admin@example.com`)
+7. **Analytics Service** - Tracks user interactions and provides usage insights (global for admins, personal for users)
+8. **Web UI** - React-based frontend for chat interaction and analytics dashboard
 
 **Infrastructure:**
 9. **Qdrant** - Vector database for semantic search (384-dimensional embeddings)
@@ -273,7 +273,11 @@ The **easiest way** to use the system:
    - First query: Get a single LLM answer with citations
    - Second query: Automatic multi-model comparison (3 models side-by-side)
    - Select your preferred answer to help improve the system
-5. **View analytics**: Check usage statistics and popular queries
+5. **View analytics**:
+   - Navigate to Analytics page from sidebar
+   - Regular users see their personal query history and statistics
+   - Admin users see global analytics across all users
+   - **Admin Login**: `admin@example.com` / `admin` (created automatically on startup)
 
 #### API Testing (For Developers)
 
@@ -282,7 +286,7 @@ The **easiest way** to use the system:
 **Step 1: Register a user**
 
 ```bash
-curl -X POST http://localhost:8004/register \
+curl -X POST http://localhost:8004/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com", "password": "testpass123"}'
 ```
@@ -290,12 +294,12 @@ curl -X POST http://localhost:8004/register \
 **Step 2: Login and get token**
 
 ```bash
-curl -X POST http://localhost:8004/login \
+curl -X POST http://localhost:8004/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com", "password": "testpass123"}'
 ```
 
-Response: `{"token": "your-session-token-here"}`
+Response: `{"session_token": "your-session-token-here", "user_id": "...", "email": "test@example.com", "is_admin": false}`
 
 **Step 3: Chat with token**
 
@@ -354,11 +358,18 @@ docker compose down -v
 
 - **URL**: <http://localhost:8004>
 - **Interactive Docs**: <http://localhost:8004/docs>
+- **Default Admin Account**:
+  - Email: `admin@example.com`
+  - Password: `admin`
+  - Created automatically on service startup
+  - Admin users can view global analytics and access all features
 - **Endpoints**:
-  - `POST /register` - Create new user account
-  - `POST /login` - Get session token (24h expiry)
-  - `POST /validate-session` - Verify Bearer token
-  - `POST /password-reset` - Reset user password
+  - `POST /auth/register` - Create new user account
+  - `POST /auth/login` - Get session token (24h expiry)
+  - `POST /auth/logout` - Invalidate session token
+  - `GET /auth/validate` - Verify Bearer token (internal use)
+  - `GET /auth/preferences/model` - Get user's preferred LLM model
+  - `POST /auth/preferences/model` - Set user's preferred LLM model
 
 ### Chat Service API
 
@@ -374,11 +385,20 @@ docker compose down -v
 
 - **URL**: <http://localhost:8005>
 - **Interactive Docs**: <http://localhost:8005/docs>
+- **Authentication**: All endpoints require `Authorization: Bearer <token>` header
+- **Access Control**:
+  - **Admin Users** (`admin@example.com`): View global analytics across all users
+  - **Regular Users**: View only their personal query history and statistics
 - **Endpoints**:
   - `GET /analytics/summary` - Overall usage statistics
-  - `GET /analytics/queries/popular` - Most common queries
-  - `GET /analytics/models/stats` - Per-model performance metrics
-  - `GET /analytics/users/{user_id}/history` - User query history
+    - Admins: Total queries, average latency, and metrics across all users
+    - Users: Personal query count, average latency for their queries
+  - `GET /analytics/popular-queries` - Most frequently asked questions
+    - Admins: Popular queries across all users
+    - Users: User's own query history
+  - `GET /analytics/model-stats` - Per-model performance metrics (admins only)
+  - `GET /analytics/recent-queries` - Recent queries with timestamps
+  - `POST /analytics/reset` - Reset all analytics data (admin only, testing purposes)
 
 ### Retrieval Service API
 
@@ -391,11 +411,9 @@ docker compose down -v
 ### Ingestion Service
 
 - **URL**: <http://localhost:8001>
-- **Interactive Docs**: <http://localhost:8001/docs>
+- **Type**: Worker service (runs once at startup, not a REST API)
 - **Endpoints**:
-  - `GET /health` - Health check
-  - `GET /stats` - Ingestion statistics
-  - `POST /ingest` - Manually trigger PDF discovery
+  - `GET /health` - Health check (RabbitMQ connection status)
 
 ### Infrastructure UIs
 
@@ -416,9 +434,11 @@ docker compose down -v
 #### PostgreSQL Database
 
 - **Host**: `localhost:5432`
-- **Database**: `marp_auth`
-- **User**: `postgres`
-- **Schema**: Users table with bcrypt password hashing
+- **Database**: `marp_db`
+- **User**: `marp_user`
+- **Tables**:
+  - `users` - User accounts with bcrypt password hashing
+  - `user_preferences` - User's preferred LLM model settings
 
 #### Redis Cache
 
@@ -494,8 +514,12 @@ MARP-Guide-AI/
 │   └── ui/                     # React web interface
 │       ├── src/
 │       │   ├── components/     # React components
-│       │   ├── services/       # API clients
-│       │   └── App.jsx         # Main app component
+│       │   ├── api/            # API clients
+│       │   ├── hooks/          # Custom React hooks
+│       │   ├── App.jsx         # Main app component
+│       │   └── index.css       # Global styles
+│       ├── Dockerfile          # Multi-stage build
+│       ├── nginx.conf          # Nginx configuration
 │       ├── package.json
 │       └── vite.config.js
 ├── common/                     # Shared modules
