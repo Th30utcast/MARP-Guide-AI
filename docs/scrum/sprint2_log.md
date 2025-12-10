@@ -87,7 +87,7 @@ Deliver production-ready system with enhanced RAG quality, user authentication, 
 **User Interaction & Analytics:**
 8. QuerySubmitted
 9. ResponseGenerated
-10. ModelComparisonTriggered 
+10. ModelComparisonTriggered
 
 ### Database Infrastructure
 - PostgreSQL database for user data
