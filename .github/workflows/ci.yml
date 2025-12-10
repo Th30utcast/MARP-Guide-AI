@@ -1,0 +1,381 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop, hotfix/**, feature/** ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  # ====================
+  # STAGE 1: Quality Checks (Parallel, Fast)
+  # ====================
+  lint:
+    name: Lint Python Code
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install linting tools
+        run: |
+          pip install flake8 black isort
+
+      - name: Check code formatting with black
+        run: |
+          black --check --diff services/ common/ tests/
+
+      - name: Check import sorting with isort
+        run: |
+          isort --check-only --diff services/ common/ tests/
+
+      - name: Lint with flake8 (only critical errors)
+        run: |
+          # Only check for critical Python syntax errors or undefined names
+          # Skip style checks (E501, F401, etc.) for now
+          flake8 services/ common/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+  # ====================
+  # STAGE 2: Unit Tests (Parallel, depends on lint)
+  # ====================
+  test-ingestion:
+    name: Test Ingestion Service
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/ingestion/requirements.txt
+          pip install pytest pytest-cov pytest-mock
+
+      - name: Run ingestion tests with coverage
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/test_ingestion.py -v \
+            --cov=services/ingestion \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-ingestion
+          path: htmlcov/
+
+  test-extraction:
+    name: Test Extraction Service
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/extraction/requirements.txt
+          pip install pytest pytest-cov pytest-mock
+
+      - name: Run extraction tests with coverage
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/test_extraction.py -v \
+            --cov=services/extraction \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-extraction
+          path: htmlcov/
+
+  test-indexing:
+    name: Test Indexing Service
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/indexing/requirements.txt
+          pip install pytest pytest-cov pytest-mock
+
+      - name: Run indexing tests with coverage
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/test_indexing.py -v \
+            --cov=services/indexing \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-indexing
+          path: htmlcov/
+
+  test-retrieval:
+    name: Test Retrieval Service
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/retrieval/requirements.txt
+          pip install pytest pytest-cov pytest-mock httpx
+
+      - name: Run retrieval tests with coverage
+        env:
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services/retrieval
+        run: |
+          pytest tests/test_retrieval.py -v \
+            --cov=services/retrieval \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-retrieval
+          path: htmlcov/
+
+  test-chat:
+    name: Test Chat Service
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/chat/requirements.txt
+          pip install pytest pytest-cov pytest-mock httpx
+
+      - name: Run chat tests with coverage
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/test_chat.py -v \
+            --cov=services/chat \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-chat
+          path: htmlcov/
+
+  test-common:
+    name: Test Common Modules
+    runs-on: ubuntu-latest
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install pika pytest pytest-cov pytest-mock
+
+      - name: Run common module tests with coverage
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/test_common.py -v \
+            --cov=common \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            --cov-report=html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-common
+          path: htmlcov/
+
+  # ====================
+  # STAGE 3: Integration Tests (Sequential, depends on unit tests)
+  # ====================
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test-ingestion, test-extraction, test-indexing, test-retrieval, test-chat, test-common]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Start services with Docker Compose
+        run: |
+          docker compose up -d rabbitmq qdrant
+          echo "Waiting for services to be ready..."
+
+      - name: Wait for RabbitMQ
+        run: |
+          timeout=60
+          until docker compose exec -T rabbitmq rabbitmq-diagnostics check_running || [ $timeout -eq 0 ]; do
+            echo "Waiting for RabbitMQ... ($timeout seconds remaining)"
+            sleep 2
+            timeout=$((timeout - 2))
+          done
+          if [ $timeout -eq 0 ]; then
+            echo "RabbitMQ failed to start"
+            docker compose logs rabbitmq
+            exit 1
+          fi
+          echo "RabbitMQ is ready"
+
+      - name: Wait for Qdrant
+        run: |
+          timeout=60
+          until curl -f http://localhost:6333/healthz || [ $timeout -eq 0 ]; do
+            echo "Waiting for Qdrant... ($timeout seconds remaining)"
+            sleep 2
+            timeout=$((timeout - 2))
+          done
+          if [ $timeout -eq 0 ]; then
+            echo "Qdrant failed to start"
+            docker compose logs qdrant
+            exit 1
+          fi
+          echo "Qdrant is ready"
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest pytest-cov pytest-mock requests httpx
+
+      - name: Run integration tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: |
+          pytest tests/test_integration.py -v --cov --cov-report=xml --cov-report=html
+
+      - name: Upload integration coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-integration
+          path: htmlcov/
+
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "=== RabbitMQ Logs ==="
+          docker compose logs rabbitmq
+          echo "=== Qdrant Logs ==="
+          docker compose logs qdrant
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker compose down -v
+
+  # ====================
+  # STAGE 4: Build Verification (Parallel with integration, depends on lint)
+  # ====================
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    needs: [lint]
+    strategy:
+      matrix:
+        service: [ingestion, extraction, indexing, retrieval, chat]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -f services/${{ matrix.service }}/Dockerfile -t marp-${{ matrix.service }}:test .
+
+      - name: Test Docker image
+        run: |
+          docker run --rm marp-${{ matrix.service }}:test python --version
+
+  # ====================
+  # STAGE 5: Coverage Report Summary (Final stage)
+  # ====================
+  coverage-report:
+    name: Coverage Report Summary
+    runs-on: ubuntu-latest
+    needs: [test-ingestion, test-extraction, test-indexing, test-retrieval, test-chat, test-common, integration-test]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate coverage summary
+        run: |
+          echo "## Coverage Reports Generated" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage reports for all services have been generated and uploaded as artifacts." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Services Tested:" >> $GITHUB_STEP_SUMMARY
+          echo "- Ingestion Service" >> $GITHUB_STEP_SUMMARY
+          echo "- Extraction Service" >> $GITHUB_STEP_SUMMARY
+          echo "- Indexing Service" >> $GITHUB_STEP_SUMMARY
+          echo "- Retrieval Service" >> $GITHUB_STEP_SUMMARY
+          echo "- Chat Service" >> $GITHUB_STEP_SUMMARY
+          echo "- Common Modules" >> $GITHUB_STEP_SUMMARY
+          echo "- Integration Tests" >> $GITHUB_STEP_SUMMARY

@@ -1,5 +1,80 @@
 services:
   # ============================================================================
+  # PostgreSQL Database - User storage
+  # ============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: marp-postgres
+    environment:
+      POSTGRES_USER: marp_user
+      POSTGRES_PASSWORD: marp_password
+      POSTGRES_DB: marp_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - marp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marp_user -d marp_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================================================
+  # Redis - Session storage
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: marp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - marp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================================================
+  # Authentication Service - User registration and login
+  # ============================================================================
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    container_name: marp-auth
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: marp_user
+      POSTGRES_PASSWORD: marp_password
+      POSTGRES_DB: marp_db
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8004:8004"   # Expose FastAPI endpoint
+    networks:
+      - marp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8004/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================================================
   # Shared RabbitMQ Message Broker
   # ============================================================================
   rabbitmq:
@@ -183,10 +258,14 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: guest
       RABBITMQ_PASSWORD: guest
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     depends_on:
       retrieval:
         condition: service_started
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "8003:8003"   # Expose FastAPI endpoint
@@ -200,6 +279,56 @@ services:
       retries: 3
       start_period: 30s
 
+  # ============================================================================
+  # UI Service - React web interface for chat
+  # ============================================================================
+  ui:
+    build:
+      context: .
+      dockerfile: services/ui/Dockerfile
+    container_name: marp-ui
+    depends_on:
+      chat:
+        condition: service_started
+      auth:
+        condition: service_started
+    ports:
+      - "8080:80"   # Expose UI on port 8080
+    networks:
+      - marp-network
+    restart: unless-stopped
+
+  # ============================================================================
+  # Analytics Service - User interaction event consumer and analytics API
+  # ============================================================================
+  analytics:
+    build:
+      context: .
+      dockerfile: services/analytics/Dockerfile
+    container_name: marp-analytics
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      AUTH_URL: http://auth:8004
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      auth:
+        condition: service_started
+    ports:
+      - "8005:8005"   # Expose Analytics API endpoint
+    networks:
+      - marp-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8005/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
 # ============================================================================
 # Shared Resources
 # ============================================================================
@@ -207,6 +336,10 @@ volumes:
   rabbitmq_data:
     driver: local
   qdrant_data:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
     driver: local
 
 networks:

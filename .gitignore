@@ -2,6 +2,11 @@
 __pycache__/
 *.pyc
 *.log
+.env
 CLAUDE.md
 storage/
 pdfs/
+venv/
+node_modules/
+dist/
+build/

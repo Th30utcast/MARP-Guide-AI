@@ -4,19 +4,24 @@ This document defines all events used in the MARP-Guide AI system. Events enable
 
 ## Overview
 
-Total Events: 7
+Total Events: 10 (Fully Implemented)
 
 | Event Name | Producer Service | Consumer Service(s) |
 |------------|-----------------|---------------------|
+| **Document Processing Pipeline Events** | | |
 | DocumentDiscovered | Ingestion Service | Extraction Service |
 | DocumentExtracted | Extraction Service | Indexing Service |
-| ChunksIndexed | Indexing Service | (None - Monitoring Service planned) |
-| IngestionFailed | Ingestion Service | (None - Monitoring Service planned) |
-| ExtractionFailed | Extraction Service | (None - Monitoring Service planned) |
-| IndexingFailed | Indexing Service | (None - Monitoring Service planned) |
-| RetrievalCompleted | Retrieval Service | (None - Monitoring Service planned) |
+| ChunksIndexed | Indexing Service | Analytics Service |
+| IngestionFailed | Ingestion Service | Analytics Service |
+| ExtractionFailed | Extraction Service | Analytics Service |
+| IndexingFailed | Indexing Service | Analytics Service |
+| RetrievalCompleted | Retrieval Service | Analytics Service |
+| **User Interaction & Analytics Events** | | |
+| QuerySubmitted | Chat Service | Analytics Service |
+| ResponseGenerated | Chat Service | Analytics Service |
+| ModelComparisonTriggered | Chat Service | Analytics Service |
 
---- 
+---
 
 ## Event Definitions
 
@@ -69,7 +74,7 @@ The Extraction Service subscribes to this event and:
 2. Validates the file integrity
 3. Prepares it for text and metadata extraction
 
---- --- --- --- 
+--- --- --- ---
 
 ### 2. DocumentExtracted
 
@@ -137,7 +142,7 @@ The Indexing Service subscribes to this event and:
 
 **Triggered By:** Indexing Service
 
-**Consumed By:** (None - Monitoring Service planned)
+**Consumed By:** Analytics Service
 
 **Purpose:** Notifies the system that document chunks have been embedded and indexed in the vector database, making them available for retrieval.
 
@@ -175,9 +180,10 @@ The Indexing Service subscribes to this event and:
 
 **Consumer Action:**
 
-(Planned) The Monitoring Service will subscribe to this event and:
-1. Update indexing statistics
-2. Track system health metrics
+The Analytics Service subscribes to this event and:
+1. Updates indexing statistics
+2. Tracks document processing completion
+3. Monitors system health metrics
 
 ---
 
@@ -187,7 +193,7 @@ The Indexing Service subscribes to this event and:
 
 **Triggered By:** Ingestion Service
 
-**Consumed By:** (None - Monitoring Service planned)
+**Consumed By:** Analytics Service
 
 **Purpose:** Notifies the system that document ingestion has failed, enabling error tracking and alerting.
 
@@ -221,10 +227,10 @@ The Indexing Service subscribes to this event and:
 
 **Consumer Action:**
 
-(Planned) The Monitoring Service will subscribe to this event and:
-1. Log errors for debugging
-2. Trigger alerts if failure rate exceeds threshold
-3. Update ingestion failure metrics
+The Analytics Service subscribes to this event and:
+1. Logs errors for debugging
+2. Tracks ingestion failure metrics
+3. Enables monitoring of system reliability
 
 ---
 
@@ -234,7 +240,7 @@ The Indexing Service subscribes to this event and:
 
 **Triggered By:** Extraction Service
 
-**Consumed By:** (None - Monitoring Service planned)
+**Consumed By:** Analytics Service
 
 **Purpose:** Notifies the system that PDF extraction has failed, enabling error tracking and retry logic.
 
@@ -268,10 +274,10 @@ The Indexing Service subscribes to this event and:
 
 **Consumer Action:**
 
-(Planned) The Monitoring Service will subscribe to this event and:
-1. Log errors for debugging
-2. Track extraction failure patterns
-3. Trigger alerts for repeated failures
+The Analytics Service subscribes to this event and:
+1. Logs errors for debugging
+2. Tracks extraction failure patterns
+3. Monitors document processing reliability
 
 ---
 
@@ -281,7 +287,7 @@ The Indexing Service subscribes to this event and:
 
 **Triggered By:** Indexing Service
 
-**Consumed By:** (None - Monitoring Service planned)
+**Consumed By:** Analytics Service
 
 **Purpose:** Notifies the system that document indexing has failed, enabling error tracking and recovery.
 
@@ -315,10 +321,10 @@ The Indexing Service subscribes to this event and:
 
 **Consumer Action:**
 
-(Planned) The Monitoring Service will subscribe to this event and:
-1. Log errors for debugging
-2. Track indexing failure rates
-3. Trigger alerts for infrastructure issues
+The Analytics Service subscribes to this event and:
+1. Logs errors for debugging
+2. Tracks indexing failure rates
+3. Monitors vector database health
 
 ---
 
@@ -328,7 +334,7 @@ The Indexing Service subscribes to this event and:
 
 **Triggered By:** Retrieval Service
 
-**Consumed By:** (None - Monitoring Service planned)
+**Consumed By:** Analytics Service
 
 **Purpose:** Logs retrieval operations for analytics, performance monitoring, and query pattern analysis.
 
@@ -370,10 +376,166 @@ The Indexing Service subscribes to this event and:
 
 **Consumer Action:**
 
-(Planned) The Monitoring Service will subscribe to this event and:
-1. Track query performance metrics
-2. Analyze common query patterns
-3. Monitor retrieval latency and quality
+The Analytics Service subscribes to this event and:
+1. Tracks query performance metrics
+2. Analyzes common query patterns
+3. Monitors retrieval latency and quality
+
+---
+
+### 8. QuerySubmitted
+
+**Event Name:** QuerySubmitted
+
+**Triggered By:** Chat Service
+
+**Consumed By:** Analytics Service
+
+**Purpose:** Tracks user queries for analytics, monitoring query patterns, and understanding user behavior.
+
+**Schema:**
+
+```json
+{
+  "eventType": "QuerySubmitted",
+  "eventId": "cc0f5166-l95i-b8k1-h483-bb3322bb7777",
+  "timestamp": "2025-10-22T15:00:00Z",
+  "correlationId": "ghi-789-rst",
+  "source": "chat-service",
+  "version": "1.0",
+  "payload": {
+    "query": "What happens if I am ill during exams?",
+    "userSessionId": "session-abc-123",
+    "modelId": "google/gemma-3n-e2b-it:free",
+    "userId": "user-12345"
+  }
+}
+```
+
+**Payload Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| query | string | The user's original question |
+| userSessionId | string | Session identifier for tracking user interactions |
+| modelId | string | ID of the LLM model to be used for response generation |
+| userId | string (optional) | Authenticated user ID (if user is logged in) |
+
+**Consumer Action:**
+
+The Analytics Service subscribes to this event and:
+1. Stores query data for analytics
+2. Tracks query patterns and popular questions
+3. Associates queries with user sessions for analysis
+4. Enables monitoring of user engagement metrics
+
+---
+
+### 9. ResponseGenerated
+
+**Event Name:** ResponseGenerated
+
+**Triggered By:** Chat Service
+
+**Consumed By:** Analytics Service
+
+**Purpose:** Tracks generated responses for quality monitoring, performance analysis, and citation metrics.
+
+**Schema:**
+
+```json
+{
+  "eventType": "ResponseGenerated",
+  "eventId": "dd0g6277-m06j-c9l2-i594-cc4433cc8888",
+  "timestamp": "2025-10-22T15:00:15Z",
+  "correlationId": "ghi-789-rst",
+  "source": "chat-service",
+  "version": "1.0",
+  "payload": {
+    "query": "What happens if I am ill during exams?",
+    "response": "According to MARP, if you are ill during exams...",
+    "modelId": "google/gemma-3n-e2b-it:free",
+    "userSessionId": "session-abc-123",
+    "latencyMs": 1247.3,
+    "citationCount": 3,
+    "retrievalCount": 5,
+    "userId": "user-12345"
+  }
+}
+```
+
+**Payload Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| query | string | The original user query |
+| response | string | The generated answer text |
+| modelId | string | ID of the LLM model used for generation |
+| userSessionId | string | Session identifier linking to QuerySubmitted event |
+| latencyMs | float | Total time to generate response in milliseconds |
+| citationCount | integer | Number of citations included in the response |
+| retrievalCount | integer | Number of document chunks retrieved |
+| userId | string (optional) | Authenticated user ID (if user is logged in) |
+
+**Consumer Action:**
+
+The Analytics Service subscribes to this event and:
+1. Stores response metrics for quality analysis
+2. Tracks model performance (latency, citation counts)
+3. Enables calculation of average response times
+4. Monitors citation quality and retrieval effectiveness
+
+---
+
+### 10. ModelComparisonTriggered
+
+**Event Name:** ModelComparisonTriggered
+
+**Triggered By:** Chat Service
+
+**Consumed By:** Analytics Service
+
+**Purpose:** Tracks when users trigger multi-model comparison feature, enabling analysis of model comparison usage patterns.
+
+**Schema:**
+
+```json
+{
+  "eventType": "ModelComparisonTriggered",
+  "eventId": "ee0h7388-n17k-d0m3-j605-dd5544dd9999",
+  "timestamp": "2025-10-22T15:05:00Z",
+  "correlationId": "jkl-012-uvw",
+  "source": "chat-service",
+  "version": "1.0",
+  "payload": {
+    "query": "What is the grade appeal process?",
+    "userSessionId": "session-abc-123",
+    "models": [
+      "google/gemma-3n-e2b-it:free",
+      "meta-llama/llama-3.2-3b-instruct:free",
+      "microsoft/phi-3-mini-128k-instruct:free"
+    ],
+    "userId": "user-12345"
+  }
+}
+```
+
+**Payload Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| query | string | The user's question to compare across models |
+| userSessionId | string | Session identifier for tracking |
+| models | array[string] | List of model IDs used for comparison |
+| userId | string (optional) | Authenticated user ID (if user is logged in) |
+
+**Consumer Action:**
+
+The Analytics Service subscribes to this event and:
+1. Tracks multi-model comparison usage frequency
+2. Records which models are commonly compared
+3. Enables analysis of user engagement with advanced features
+4. Supports A/B testing and model performance analysis
 
 ---
 
@@ -408,7 +570,9 @@ All events follow this structure:
 
 ## Correlation ID Tracking
 
-The `correlationId` allows tracing a document's journey through the system:
+The `correlationId` allows tracing related events through the system:
+
+### Document Processing Pipeline Flow
 
 **Success Flow:**
 ```
@@ -429,6 +593,8 @@ IngestionFailed (correlationId: abc-123-xyz)
 ```
 DocumentDiscovered (correlationId: abc-123-xyz)
     ↓
+DocumentExtracted (correlationId: abc-123-xyz)
+    ↓
 ExtractionFailed (correlationId: abc-123-xyz)
 ```
 
@@ -440,11 +606,32 @@ DocumentExtracted (correlationId: abc-123-xyz)
 IndexingFailed (correlationId: abc-123-xyz)
 ```
 
-All events related to processing a single document share the same `correlationId`, enabling:
+### User Interaction Flow
+
+```
+QuerySubmitted (correlationId: ghi-789-rst)
+    ↓
+RetrievalCompleted (correlationId: ghi-789-rst)
+    ↓
+ResponseGenerated (correlationId: ghi-789-rst)
+```
+
+```
+QuerySubmitted (correlationId: jkl-012-uvw)
+    ↓
+ModelComparisonTriggered (correlationId: jkl-012-uvw)
+    ↓
+RetrievalCompleted (correlationId: jkl-012-uvw) [per model]
+    ↓
+ResponseGenerated (correlationId: jkl-012-uvw) [per model]
+```
+
+All events related to a single operation share the same `correlationId`, enabling:
 - End-to-end system monitoring
 - Debugging and troubleshooting
-- Performance analysis per document
+- Performance analysis per operation
 - Failure tracking and correlation
+- User session tracking across services
 
 ## Event Versioning Strategy
 
@@ -474,7 +661,7 @@ Example evolution:
 }
 ```
 
---- --- --- ---
+---
 
-**Last Updated:** Nov 5 2025
-**Assessment:** Assessment 1 - First Increment
+**Last Updated:** Dec 10 2025
+**Assessment:** Assessment 2 - Second Increment
