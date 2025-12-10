@@ -96,10 +96,10 @@ sequenceDiagram
 - **Collection**: marp-documents
 - **Distance Metric**: Cosine similarity
 - **Vector Dimension**: 384
-- **Default top_k**: 5
+- **Default top_k**: 10
 - **Max top_k**: 20
 - **Query timeout**: 30 seconds
-- **Max query length**: 512 characters
+- **Max query length**: 1000 characters
 
 ## Data Flow
 
