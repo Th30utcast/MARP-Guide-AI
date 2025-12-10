@@ -61,7 +61,10 @@ Emitted when PDF extraction is successfully completed
       "title": "string",
       "author": "string",
       "creation_date": "string",
-      "year": "integer"
+      "year": "integer",
+      "subject": "string (optional)",
+      "creator": "string (optional)",
+      "producer": "string (optional)"
     },
     "pages_ref": "string (absolute path to pages.jsonl)"
   }
@@ -97,3 +100,19 @@ One JSON object per line, each representing a page:
 {"documentId": "doc123", "page": 1, "text": "Page 1 content..."}
 {"documentId": "doc123", "page": 2, "text": "Page 2 content..."}
 ```
+
+## Configuration
+
+Environment variables:
+- `STORAGE_PATH` - Directory for extracted content storage (default: "/app/storage/extracted")
+- `RABBITMQ_HOST` - RabbitMQ hostname (default: "rabbitmq")
+- `RABBITMQ_PORT` - RabbitMQ port (default: 5672)
+
+## Technical Details
+
+- **Port**: 8080 (health check only)
+- **Extraction Tool**: pdfplumber
+- **Processing**: Page-by-page text extraction
+- **Event Storage**: JSON files saved to disk for event sourcing
+- **Scanned Pages**: Logs warnings for pages with no extractable text (e.g., scanned images)
+- **Error Handling**: Publishes ExtractionFailed events on errors

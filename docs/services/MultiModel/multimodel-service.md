@@ -1,5 +1,10 @@
 # Service Name: Multi-Model Comparison Service
 
+> **NOTICE**
+> This is NOT a separate service. Multi-model comparison functionality has been integrated into the Chat Service.
+> See [Chat Service Documentation](../Rag-Chat/ragchat-service.md) for current implementation details.
+> Endpoints: `POST /chat/compare` and `POST /chat/comparison/select`
+
 ## Responsibility
 
 Provides parallel LLM comparison by generating answers from 3 different models simultaneously, allowing users to compare outputs side-by-side and select their preferred model.
@@ -14,6 +19,8 @@ This service is stateless and does not persist data. It orchestrates:
 - Analytics event publishing via RabbitMQ
 
 ## API Endpoints
+
+> **Note:** These endpoints are part of the Chat Service, not a separate service.
 
 - [POST] /chat/compare - Generate parallel answers from 3 LLM models (requires authentication)
 - [POST] /chat/comparison/select - Save user's model selection from comparison (requires authentication)
@@ -36,10 +43,12 @@ Multi-model comparison endpoint - generates answers from 3 LLM models in paralle
 }
 ```
 
-**Models Used:**
-1. `google/gemma-3n-e2b-it:free` (Gemini 3N - 2B)
-2. `meta-llama/llama-3.2-3b-instruct:free` (Llama 3.2 - 3B)
-3. `microsoft/phi-3-mini-128k-instruct:free` (Phi-3 Mini - 3.8B)
+**Models Used (Current Configuration):**
+1. `openai/gpt-4o-mini` (GPT-4o Mini)
+2. `google/gemma-3n-e2b-it:free` (Google Gemma 3n 2B)
+3. `deepseek/deepseek-chat` (DeepSeek Chat)
+
+> **Note:** Model list is configurable via `COMPARISON_MODELS` in chat service config
 
 **Response: 200 OK**
 

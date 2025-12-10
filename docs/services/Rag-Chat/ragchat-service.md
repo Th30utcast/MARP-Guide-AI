@@ -17,6 +17,8 @@ This service is stateless and does not persist data. It orchestrates:
 ## API Endpoints
 
 - [POST] /chat - Handle user chat queries using RAG pipeline (requires authentication)
+- [POST] /chat/compare - Multi-model comparison for user queries (requires authentication)
+- [POST] /chat/comparison/select - Record user's model selection from comparison (requires authentication)
 - [GET] /health - Health check endpoint
 
 ## Chat Service API
@@ -34,7 +36,7 @@ Handles user chat queries using the RAG pipeline (Retrieval-Augmented Generation
   "query": "string (required, max 1000 chars)",
   "top_k": "integer (optional, default: 8, range: 1-20)",
   "session_id": "string (optional, for analytics)",
-  "model_id": "string (optional, defaults to PRIMARY_MODEL_ID)"
+  "model_id": "string (optional, defaults to openai/gpt-4o-mini)"
 }
 ```
 
@@ -75,6 +77,86 @@ Handles user chat queries using the RAG pipeline (Retrieval-Augmented Generation
 - `QuerySubmitted` - When query received
 - `ResponseGenerated` - When answer generated
 
+### POST /chat/compare
+
+Generates answers from multiple LLM models in parallel for comparison
+
+**Authentication:** Required via `Authorization: Bearer <session_token>` header
+
+**Request Body:**
+
+```json
+{
+  "query": "string (required, max 1000 chars)",
+  "top_k": "integer (optional, default: 8, range: 1-20)",
+  "session_id": "string (optional, for analytics)"
+}
+```
+
+**Response: 200 OK**
+
+```json
+{
+  "query": "What is the exam policy?",
+  "results": [
+    {
+      "model_id": "openai/gpt-4o-mini",
+      "model_name": "GPT-4o Mini",
+      "answer": "According to MARP [1]...",
+      "citations": [...]
+    },
+    {
+      "model_id": "google/gemma-3n-e2b-it:free",
+      "model_name": "Google Gemma 3n 2B",
+      "answer": "Based on the regulations [1]...",
+      "citations": [...]
+    },
+    {
+      "model_id": "deepseek/deepseek-chat",
+      "model_name": "DeepSeek Chat",
+      "answer": "The exam policy states [1]...",
+      "citations": [...]
+    }
+  ]
+}
+```
+
+**Events Published:**
+- `ModelComparisonTriggered` - When comparison is initiated
+
+### POST /chat/comparison/select
+
+Records user's model preference from comparison results
+
+**Authentication:** Required via `Authorization: Bearer <session_token>` header
+
+**Request Body:**
+
+```json
+{
+  "query": "string",
+  "model_id": "string",
+  "answer": "string",
+  "session_id": "string (optional)",
+  "latency_ms": "float",
+  "citation_count": "integer",
+  "retrieval_count": "integer"
+}
+```
+
+**Response: 200 OK**
+
+```json
+{
+  "status": "ok",
+  "message": "Selection recorded"
+}
+```
+
+**Events Published:**
+- `QuerySubmitted` - For selected model only
+- `ResponseGenerated` - For selected model only
+
 ### GET /health
 
 Health check and configuration status
@@ -87,7 +169,7 @@ Health check and configuration status
   "service": "ChatService",
   "retrieval_url": "http://retrieval:8002",
   "openrouter_configured": true,
-  "model": "google/gemma-3n-e2b-it:free"
+  "model": "openai/gpt-4o-mini"
 }
 ```
 
@@ -109,7 +191,7 @@ Body: { "query": "...", "top_k": 5 }
 Builds RAG prompt with:
 
 - System instructions (answer based on context only)
-- Context from retrieved chunks (max 2000 tokens)
+- Context from retrieved chunks (max 3500 tokens)
 - User query
 - Citation requirements
 
@@ -140,13 +222,14 @@ ANSWER:
 
 ### 3. Generation
 
-Sends prompt to OpenRouter API using DeepSeek Chat v3.1 model
+Sends prompt to OpenRouter API using configured LLM model
 
 **Configuration:**
 
-- Model: `deepseek/deepseek-chat-v3.1:free`
-- Temperature: 0.7
-- Max tokens: 500
+- Default Model: `openai/gpt-4o-mini`
+- Temperature: 0.4 (balanced for focused answers)
+- Max tokens: 1200 (prevents cutoff)
+- Max context: 3500 tokens
 - Timeout: 60 seconds
 
 ### 4. Citation
@@ -187,9 +270,10 @@ Routing key: `chat.answer.generated`
 
 **LLM Integration:**
 - Provider: OpenRouter API (OpenAI SDK compatible)
-- Primary Model: `google/gemma-3n-e2b-it:free`
-- Temperature: 0.7
-- Max tokens: 500
+- Primary Model: `openai/gpt-4o-mini` (configurable via OPENROUTER_MODEL env var)
+- Temperature: 0.4
+- Max tokens: 1200
+- Max context: 3500 tokens
 
 **Query Processing:**
 - Query reformulation: Optional (configurable via ENABLE_QUERY_REFORMULATION)

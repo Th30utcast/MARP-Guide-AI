@@ -78,3 +78,43 @@ Emitted when a PDF is successfully discovered and downloaded
 ```
 
 Routing key: `documents.discovered`
+
+### IngestionFailed
+
+Emitted when PDF discovery or download fails
+
+```json
+{
+  "eventType": "IngestionFailed",
+  "eventId": "uuid",
+  "timestamp": "ISO-8601",
+  "correlationId": "uuid",
+  "source": "ingestion-service",
+  "version": "1.0",
+  "payload": {
+    "document_id": "string",
+    "error_type": "string (FetchError, ValidationError, etc.)",
+    "error_message": "string",
+    "failed_at": "ISO-8601"
+  }
+}
+```
+
+Routing key: `documents.ingestion.failed`
+
+## Configuration
+
+Environment variables:
+- `MARP_URL` - Lancaster MARP website URL (default: hardcoded in docker-compose)
+- `PDF_OUTPUT_DIR` - Directory for downloaded PDFs (default: "/app/pdfs")
+- `STORAGE_PATH` - Directory for event storage (default: "/app/storage/extracted")
+- `RABBITMQ_HOST` - RabbitMQ hostname (default: "rabbitmq")
+- `RABBITMQ_PORT` - RabbitMQ port (default: 5672)
+
+## Technical Details
+
+- **Port**: 8001
+- **Scraping**: BeautifulSoup4 for HTML parsing
+- **Download**: Requests library with MD5 checksum validation
+- **Event Storage**: JSON files saved to disk for event sourcing
+- **Error Handling**: Publishes IngestionFailed events on errors

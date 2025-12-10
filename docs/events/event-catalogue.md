@@ -142,7 +142,7 @@ The Indexing Service subscribes to this event and:
 
 **Triggered By:** Indexing Service
 
-**Consumed By:** (None - Monitoring Service planned)
+**Consumed By:** Analytics Service
 
 **Purpose:** Notifies the system that document chunks have been embedded and indexed in the vector database, making them available for retrieval.
 
@@ -180,9 +180,10 @@ The Indexing Service subscribes to this event and:
 
 **Consumer Action:**
 
-(Planned) The Monitoring Service will subscribe to this event and:
-1. Update indexing statistics
-2. Track system health metrics
+The Analytics Service subscribes to this event and:
+1. Updates indexing statistics
+2. Tracks document processing completion
+3. Monitors system health metrics
 
 ---
 
@@ -192,7 +193,7 @@ The Indexing Service subscribes to this event and:
 
 **Triggered By:** Ingestion Service
 
-**Consumed By:** (None - Monitoring Service planned)
+**Consumed By:** Analytics Service
 
 **Purpose:** Notifies the system that document ingestion has failed, enabling error tracking and alerting.
 
@@ -226,10 +227,10 @@ The Indexing Service subscribes to this event and:
 
 **Consumer Action:**
 
-(Planned) The Monitoring Service will subscribe to this event and:
-1. Log errors for debugging
-2. Trigger alerts if failure rate exceeds threshold
-3. Update ingestion failure metrics
+The Analytics Service subscribes to this event and:
+1. Logs errors for debugging
+2. Tracks ingestion failure metrics
+3. Enables monitoring of system reliability
 
 ---
 
@@ -239,7 +240,7 @@ The Indexing Service subscribes to this event and:
 
 **Triggered By:** Extraction Service
 
-**Consumed By:** (None - Monitoring Service planned)
+**Consumed By:** Analytics Service
 
 **Purpose:** Notifies the system that PDF extraction has failed, enabling error tracking and retry logic.
 
@@ -273,10 +274,10 @@ The Indexing Service subscribes to this event and:
 
 **Consumer Action:**
 
-(Planned) The Monitoring Service will subscribe to this event and:
-1. Log errors for debugging
-2. Track extraction failure patterns
-3. Trigger alerts for repeated failures
+The Analytics Service subscribes to this event and:
+1. Logs errors for debugging
+2. Tracks extraction failure patterns
+3. Monitors document processing reliability
 
 ---
 
@@ -286,7 +287,7 @@ The Indexing Service subscribes to this event and:
 
 **Triggered By:** Indexing Service
 
-**Consumed By:** (None - Monitoring Service planned)
+**Consumed By:** Analytics Service
 
 **Purpose:** Notifies the system that document indexing has failed, enabling error tracking and recovery.
 
@@ -320,10 +321,10 @@ The Indexing Service subscribes to this event and:
 
 **Consumer Action:**
 
-(Planned) The Monitoring Service will subscribe to this event and:
-1. Log errors for debugging
-2. Track indexing failure rates
-3. Trigger alerts for infrastructure issues
+The Analytics Service subscribes to this event and:
+1. Logs errors for debugging
+2. Tracks indexing failure rates
+3. Monitors vector database health
 
 ---
 
@@ -333,7 +334,7 @@ The Indexing Service subscribes to this event and:
 
 **Triggered By:** Retrieval Service
 
-**Consumed By:** (None - Monitoring Service planned)
+**Consumed By:** Analytics Service
 
 **Purpose:** Logs retrieval operations for analytics, performance monitoring, and query pattern analysis.
 
@@ -375,10 +376,10 @@ The Indexing Service subscribes to this event and:
 
 **Consumer Action:**
 
-(Planned) The Monitoring Service will subscribe to this event and:
-1. Track query performance metrics
-2. Analyze common query patterns
-3. Monitor retrieval latency and quality
+The Analytics Service subscribes to this event and:
+1. Tracks query performance metrics
+2. Analyzes common query patterns
+3. Monitors retrieval latency and quality
 
 ---
 

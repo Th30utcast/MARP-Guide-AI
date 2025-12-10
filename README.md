@@ -117,17 +117,16 @@ graph TB
   %% Styling
   style DataProcessing fill:#00A310,stroke:#333,stroke-width:2px
   style Infrastructure fill:#A3A300,stroke:#333,stroke-width:2px
-  style Presentation fill:#808080,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
-  style Application fill:#808080,stroke:#333,stroke-width:2px,stroke-dasharray: 5 5
+  style Presentation fill:#00A310,stroke:#333,stroke-width:2px
+  style Application fill:#00A310,stroke:#333,stroke-width:2px
   style External fill:#003BD1,stroke:#333,stroke-width:2px
   style Users fill:#FF6B6B,stroke:#333,stroke-width:2px
 ```
 
 **Legend:**
 
-- ✅ **Green** - Operational (Data Processing Pipeline)
+- ✅ **Green** - Operational (All services fully implemented)
 - **Yellow** - Infrastructure (Always-on services)
-- 🚧 **Gray Dashed** - Planned Features (Tier 1 & 2)
 - **Blue** - External Systems
 - **Red** - End Users
 
@@ -808,8 +807,9 @@ docker compose logs ingestion
 
 - **Embedding Model**: `all-MiniLM-L6-v2` (384 dimensions, cosine similarity)
 - **LLM Provider**: OpenRouter (free tier available)
-- **Default LLM**: `google/gemma-3n-e2b-it:free` (Temperature: 0.7, Max Tokens: 500)
-- **Multi-Model Support**: Configurable for comparing multiple LLMs simultaneously
+- **Default LLM**: `openai/gpt-4o-mini` (Temperature: 0.4, Max Tokens: 1200)
+- **Multi-Model Comparison**: 3 models compared in parallel (GPT-4o Mini, Gemma 3n, DeepSeek Chat)
+- **Max Context**: 3500 tokens for comprehensive answers
 
 ### Frontend
 

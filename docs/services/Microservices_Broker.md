@@ -23,6 +23,9 @@ flowchart TB
     Q2([documents.extracted])
     Q3([documents.indexed])
     Q4([retrieval.completed])
+    Q5([analytics.query.submitted])
+    Q6([analytics.response.generated])
+    Q7([analytics.model.comparison])
   end
 
   subgraph Extraction["Extraction Service (Worker)"]
@@ -52,11 +55,22 @@ flowchart TB
   end
 
   subgraph LLM["External LLM"]
-    OpenRouter[OpenRouter API<br/>DeepSeek Chat v3.1]
+    OpenRouter[OpenRouter API<br/>GPT-4o Mini default]
   end
 
-  subgraph Future["🚧 Future Services"]
-    UI[Web UI<br/>Chat Interface]
+  subgraph Auth["Auth Service (FastAPI)"]
+    AA[FastAPI App<br/>REST API]
+    ADB[(PostgreSQL<br/>Users)]
+    ARD[(Redis<br/>Sessions)]
+  end
+
+  subgraph Analytics["Analytics Service (FastAPI)"]
+    AN[FastAPI App<br/>REST API]
+    AW[RabbitMQ Consumer<br/>Event Tracker]
+  end
+
+  subgraph UI["Web UI (React)"]
+    WebUI[React App<br/>Vite + Tailwind]
   end
 
   MARP -->|HTTP GET| Scraper
@@ -87,20 +101,33 @@ flowchart TB
   RA -->|search results| CA
   CA -->|HTTP POST| OpenRouter
   OpenRouter -->|generated answer| CA
-  CA -->|optional| Exchange
+  CA -->|publish analytics| Exchange
+  Exchange --> Q5
+  Exchange --> Q6
+  Exchange --> Q7
+  Q5 -->|consume| AW
+  Q6 -->|consume| AW
+  Q7 -->|consume| AW
+  AW --> AN
 
-  Chat -.->|future| UI
+  WebUI -->|HTTP POST| AA
+  AA --> ADB
+  AA --> ARD
+  WebUI -->|HTTP POST /chat| CA
+  CA -->|validate session| AA
 
   style Ingestion fill:#00A310
   style Extraction fill:#00A310
   style Indexing fill:#00A310
   style Retrieval fill:#00A310
   style Chat fill:#00A310
+  style Auth fill:#00A310
+  style Analytics fill:#00A310
+  style UI fill:#00A310
   style Broker fill:#A3A300
   style Storage fill:#003BD1
   style VectorDB fill:#003BD1
   style LLM fill:#D17800
-  style Future fill:,stroke-dasharray: 5 5
 ```
 
 ## Legend
@@ -113,8 +140,11 @@ flowchart TB
 
 ## Current Status
 
-- ✅ **Operational**: Ingestion → Extraction → Indexing → Retrieval → Chat pipeline
-- 🚧 **In Development**: Web UI service
+- ✅ **Operational**: All services fully implemented and operational
+  - Data Pipeline: Ingestion → Extraction → Indexing
+  - Query Pipeline: Retrieval → Chat (RAG + Multi-Model Comparison)
+  - User Services: Auth → Web UI
+  - Analytics: Event tracking and usage insights
 
 ## Event Details
 
@@ -204,11 +234,30 @@ flowchart TB
 }
 ```
 
-### 5. AnswerGenerated
+### 5. QuerySubmitted
 
 ```json
 {
-  "eventType": "AnswerGenerated",
+  "eventType": "QuerySubmitted",
+  "eventId": "uuid",
+  "timestamp": "2025-11-04T18:30:45Z",
+  "correlationId": "uuid",
+  "source": "chat-service",
+  "version": "1.0",
+  "payload": {
+    "query": "What happens if I am ill during exams?",
+    "userSessionId": "session-abc-123",
+    "modelId": "openai/gpt-4o-mini",
+    "userId": "user-12345"
+  }
+}
+```
+
+### 6. ResponseGenerated
+
+```json
+{
+  "eventType": "ResponseGenerated",
   "eventId": "uuid",
   "timestamp": "2025-11-04T18:30:47Z",
   "correlationId": "uuid",
@@ -216,13 +265,47 @@ flowchart TB
   "version": "1.0",
   "payload": {
     "query": "What happens if I am ill during exams?",
-    "answer": "According to the MARP regulations, if you are ill during exams you should submit an Extenuating Circumstances claim...",
-    "citation_count": 2,
-    "generated_at": "2025-11-04T18:30:47Z",
-    "trace_id": "trace-abc123"
+    "response": "According to the MARP regulations, if you are ill during exams you should submit an Extenuating Circumstances claim...",
+    "modelId": "openai/gpt-4o-mini",
+    "userSessionId": "session-abc-123",
+    "latencyMs": 1247.3,
+    "citationCount": 3,
+    "retrievalCount": 5,
+    "userId": "user-12345"
   }
 }
 ```
+
+### 7. ModelComparisonTriggered
+
+```json
+{
+  "eventType": "ModelComparisonTriggered",
+  "eventId": "uuid",
+  "timestamp": "2025-11-04T18:35:00Z",
+  "correlationId": "uuid",
+  "source": "chat-service",
+  "version": "1.0",
+  "payload": {
+    "query": "What is the grade appeal process?",
+    "userSessionId": "session-abc-123",
+    "models": [
+      "openai/gpt-4o-mini",
+      "google/gemma-3n-e2b-it:free",
+      "deepseek/deepseek-chat"
+    ],
+    "userId": "user-12345"
+  }
+}
+```
+
+### Failure Events
+
+All services publish failure events when errors occur:
+
+- **IngestionFailed** → `documents.ingestion.failed`
+- **ExtractionFailed** → `documents.extraction.failed`
+- **IndexingFailed** → `documents.indexing.failed`
 
 ## Storage Structure
 
@@ -257,34 +340,85 @@ All services utilize shared modules for consistency:
 #### Ingestion Service (Port 8001)
 
 - `GET /health` - Health check
-- `POST /ingest` - Manually trigger ingestion
 - `GET /stats` - View ingestion statistics
+- `GET /docs` - Interactive API documentation
 
 #### Retrieval Service (Port 8002)
 
-- `GET /health` - Health check (returns model info and collection status)
-- `GET /readyz` - Readiness check (verifies Qdrant connectivity)
+- `GET /health` - Health check (includes Qdrant connectivity)
 - `POST /search` - Semantic search endpoint
   - Request: `{"query": "your question", "top_k": 5}`
-  - Response: Returns top-k results with text, metadata, and relevance scores
-- `GET /docs` - Interactive API documentation (Swagger UI)
+  - Response: Returns top-k results with text, metadata, and scores (max 1700 chars per result)
+- `GET /docs` - Interactive API documentation
 
 #### Chat Service (Port 8003)
 
+**Requires Authentication**: All endpoints need `Authorization: Bearer <token>` header
+
 - `GET /health` - Health check
-- `POST /chat` - RAG-powered question answering
-  - Request: `{"query": "your question", "top_k": 5}`
+- `POST /chat` - Single model RAG-powered question answering
+  - Request: `{"query": "your question", "top_k": 8, "model_id": "openai/gpt-4o-mini"}`
   - Response: Returns generated answer with citations
-- `GET /docs` - Interactive API documentation (Swagger UI)
+- `POST /chat/compare` - Multi-model comparison (3 models in parallel)
+  - Request: `{"query": "your question", "top_k": 8}`
+  - Response: Returns 3 answers from different models
+- `POST /chat/comparison/select` - Record user's model selection
+- `GET /docs` - Interactive API documentation
+
+#### Auth Service (Port 8004)
+
+- `GET /health` - Health check
+- `POST /register` - Create new user account
+  - Request: `{"email": "user@example.com", "password": "password"}`
+- `POST /login` - Login and get session token (24h expiry)
+  - Request: `{"email": "user@example.com", "password": "password"}`
+  - Response: `{"token": "session-token"}`
+- `POST /validate-session` - Validate Bearer token
+- `POST /password-reset` - Reset user password
+- `GET /auth/preferences/model` - Get user's preferred model
+- `POST /auth/preferences/model` - Set user's preferred model
+- `GET /docs` - Interactive API documentation
+
+#### Analytics Service (Port 8005)
+
+- `GET /health` - Health check
+- `GET /analytics/summary` - Overall usage statistics
+- `GET /analytics/queries/popular` - Most common queries
+- `GET /analytics/models/stats` - Per-model performance metrics
+- `GET /analytics/users/{user_id}/history` - User query history
+- `POST /analytics/reset` - Reset analytics data (admin only)
+- `GET /docs` - Interactive API documentation
+
+#### Web UI (Port 8080)
+
+- React single-page application
+- Features:
+  - User registration and login
+  - RAG-powered chat with citations
+  - Automatic multi-model comparison (on 2nd query)
+  - Analytics dashboard
+  - Lancaster University branding
 
 ### Docker Compose Configuration
 
 Services are orchestrated with proper health checks and restart policies:
 
-- **RabbitMQ** - Always running message broker
-- **Qdrant** - Always running vector database
-- **Ingestion** - Runs once at startup, exits when complete
+**Infrastructure:**
+- **RabbitMQ** (Port 5672, Management UI: 15672) - Message broker
+- **Qdrant** (Port 6333) - Vector database
+- **PostgreSQL** (Port 5432) - User database
+- **Redis** (Port 6379) - Session storage
+
+**Data Processing Pipeline:**
+- **Ingestion** (Port 8001) - Runs once at startup, auto-discovers PDFs
 - **Extraction** - Worker that processes documents continuously
 - **Indexing** - Worker that indexes documents continuously
-- **Retrieval** - Always running REST API service
-- **Chat** - Always running REST API service (RAG pipeline)
+
+**Application Services:**
+- **Retrieval** (Port 8002) - REST API for semantic search
+- **Chat** (Port 8003) - RAG + Multi-Model Comparison API
+- **Auth** (Port 8004) - User authentication and session management
+- **Analytics** (Port 8005) - Usage tracking and insights
+
+**Frontend:**
+- **Web UI** (Port 8080) - React app for user interaction

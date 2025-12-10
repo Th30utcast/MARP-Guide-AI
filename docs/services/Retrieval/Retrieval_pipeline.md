@@ -24,7 +24,7 @@ sequenceDiagram
 
   RT->>RT: Remove duplicate text chunks
 
-  RT->>RT: Trim text to 800 chars
+  RT->>RT: Trim text to 1700 chars
 
   RT->>RT: Format SearchResponse<br/>(results with metadata)
 
@@ -96,10 +96,10 @@ sequenceDiagram
 - **Collection**: marp-documents
 - **Distance Metric**: Cosine similarity
 - **Vector Dimension**: 384
-- **Default top_k**: 10
+- **Default top_k**: 5
 - **Max top_k**: 20
-- **Query timeout**: 30 seconds
 - **Max query length**: 1000 characters
+- **Text truncation**: 1700 characters (with "…" suffix)
 
 ## Data Flow
 
