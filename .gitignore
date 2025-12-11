@@ -10,3 +10,8 @@ venv/
 node_modules/
 dist/
 build/
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
+.env
