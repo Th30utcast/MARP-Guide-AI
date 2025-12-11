@@ -101,6 +101,7 @@ Routing key: `documents.indexing.failed`
 
 - **Collection**: marp-documents
 - **Distance metric**: Cosine similarity
+- **Connection retry**: 10 attempts with 2-second delay between retries
 - **Payload schema**:
   - text: string (chunk content)
   - document_id: string
@@ -108,3 +109,33 @@ Routing key: `documents.indexing.failed`
   - title: string
   - page: integer
   - url: string
+
+## Debugging Files
+
+The service saves debugging/audit files to disk:
+
+- **chunks.json** - `/app/storage/extracted/{document_id}/chunks.json`
+  - All generated chunks before embedding
+  - Useful for debugging chunking logic
+
+- **indexed.json** - `/app/storage/extracted/{document_id}/indexed.json`
+  - ChunksIndexed event metadata
+  - Event sourcing for audit trail
+
+## Configuration
+
+Environment variables:
+- `QDRANT_HOST` - Qdrant server hostname (default: "qdrant")
+- `QDRANT_PORT` - Qdrant server port (default: 6333)
+- `STORAGE_PATH` - Directory for event storage (default: "/app/storage/extracted")
+- `RABBITMQ_HOST` - RabbitMQ hostname (default: "rabbitmq")
+- `RABBITMQ_PORT` - RabbitMQ port (default: 5672)
+
+## Technical Details
+
+- **Port**: 8080 (health check only)
+- **Embedding Model**: sentence-transformers/all-MiniLM-L6-v2
+- **Retry Logic**: Qdrant connection retries 10 times with 2s exponential backoff
+- **Batch Processing**: Embeds 32 chunks at a time for efficiency
+- **Event Storage**: JSON files saved to disk for event sourcing
+- **Error Handling**: Publishes IndexingFailed events on errors

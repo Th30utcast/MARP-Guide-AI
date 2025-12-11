@@ -7,10 +7,15 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     proxy: {
-      '/api': {
+      '/api/chat': {
         target: 'http://localhost:8003',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        rewrite: (path) => path.replace(/^\/api\/chat/, '')
+      },
+      '/api/auth': {
+        target: 'http://localhost:8004',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/auth/, '/auth')
       }
     }
   }

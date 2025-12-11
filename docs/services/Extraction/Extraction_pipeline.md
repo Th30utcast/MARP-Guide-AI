@@ -19,23 +19,27 @@ sequenceDiagram
   EX->>PDF: Open PDF file
   PDF-->>EX: PDF object
 
-  loop For each page
-    EX->>PDF: Extract text from page
-    PDF-->>EX: Page text
-    EX->>PDF: Extract metadata
-    PDF-->>EX: Title, author, year, etc.
+  alt Success
+    loop For each page
+      EX->>PDF: Extract text from page
+      PDF-->>EX: Page text
+      EX->>PDF: Extract metadata
+      PDF-->>EX: Title, author, year, etc.
+    end
+
+    EX->>FS: Save pages.jsonl<br/>(one page per line)
+    EX->>FS: Save extracted.json
+
+    EX->>BR: Publish DocumentExtracted event
+    Note over BR: Event sent to<br/>documents.extracted queue
+
+    EX->>EX: Acknowledge message
+    Note over EX: Extraction complete
+  else Failure
+    EX->>BR: Publish ExtractionFailed event
+    Note over BR: Event sent to<br/>documents.extraction.failed
+    EX->>EX: Acknowledge message (reject)
   end
-
-  EX->>FS: Save pages.jsonl<br/>(one page per line)
-  EX->>FS: Save extracted.json
-
-  EX->>BR: Publish DocumentExtracted event
-
-  Note over BR: Event sent to<br/>documents.extracted queue
-
-  EX->>EX: Acknowledge message
-
-  Note over EX: Extraction complete
 ```
 
 ## DocumentExtracted Event
@@ -82,6 +86,35 @@ storage/extracted/
 {"documentId": "Intro-to-MARP", "page": 2, "text": "MARP 2025-26 Introduction CONTENTS..."}
 {"documentId": "Intro-to-MARP", "page": 3, "text": "SCOPE OF MARP The Manual of..."}
 ```
+
+## ExtractionFailed Event
+
+Published when PDF extraction fails (corrupted file, unreadable, etc.):
+
+```json
+{
+  "eventType": "ExtractionFailed",
+  "eventId": "uuid",
+  "timestamp": "2025-11-02T14:54:00Z",
+  "correlationId": "uuid",
+  "source": "extraction-service",
+  "version": "1.0",
+  "payload": {
+    "documentId": "Corrupted-PDF",
+    "errorType": "CorruptedFileError",
+    "errorMessage": "PDF file is corrupted and cannot be parsed",
+    "failedAt": "2025-11-02T14:54:00Z"
+  }
+}
+```
+
+Routing key: `documents.extraction.failed`
+
+## Error Handling
+
+- **Empty pages**: Logged with warning, page saved with empty text
+- **Scanned images**: Pages with no extractable text logged as warnings
+- **Corrupted PDFs**: ExtractionFailed event published
 
 ## Technologies
 

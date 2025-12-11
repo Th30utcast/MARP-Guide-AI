@@ -14,8 +14,7 @@ This service is stateless and does not own data. It queries:
 ## API Endpoints
 
 - [POST] /search - Execute semantic search over indexed documents
-- [GET] /health - Liveness probe
-- [GET] /ready - Readiness probe (checks Qdrant connectivity)
+- [GET] /health - Health check (includes Qdrant connectivity check)
 
 ## Retrieval Service API
 
@@ -39,7 +38,7 @@ Execute vector/keyword retrieval against the index
   "query": "What is the exam policy?",
   "results": [
     {
-      "text": "string (chunk content, max 800 chars)",
+      "text": "string (chunk content, max 1700 chars)",
       "document_id": "string",
       "chunk_index": "integer",
       "title": "string",
@@ -54,34 +53,25 @@ Execute vector/keyword retrieval against the index
 **Errors:**
 
 - 400 Bad Request - Missing/invalid query or top_k parameter
-- 413 Payload Too Large - Query exceeds max length (512 chars)
-- 429 Too Many Requests - Rate limit exceeded
-- 500 Internal Server Error - Qdrant connection failed
+- 422 Validation Error - Invalid parameter types
+- 500 Internal Server Error - Qdrant connection failed or search error
 
 **Notes:**
 
 - Results are ordered by descending similarity score
 - Duplicate text chunks are removed from results
-- Text chunks are trimmed to 800 characters for response efficiency
+- Text chunks are trimmed to 1700 characters for response efficiency
 
 ### GET /health
 
-Liveness probe
+Health check endpoint (checks Qdrant connectivity)
 
 ```http
 # Response: 200 OK
-# Body: { "status": "ok" }
-```
-
-### GET /ready
-
-Readiness probe (checks if Qdrant is reachable)
-
-```http
-# Response: 200 OK - Service is ready
-# Body: { "status": "ready" }
+# Body: { "status": "healthy", "qdrant": "connected" }
 
 # Response: 503 Service Unavailable - Qdrant not reachable
+# Body: { "status": "unhealthy", "qdrant": "disconnected" }
 ```
 
 ## Events Published (Optional)
@@ -103,13 +93,21 @@ Emitted after successful search (optional analytics event)
 }
 ```
 
-Routing key: `retrieval.query.completed`
+Routing key: `retrieval.completed`
 
 ## Technical Details
 
 - **Model**: all-MiniLM-L6-v2 (loaded once at startup)
 - **Vector dimension**: 384
 - **Search method**: Cosine similarity in Qdrant
-- **Query timeout**: 30 seconds
-- **Max query length**: 512 characters
+- **Port**: 8002
 - **Deduplication**: Removes duplicate text from results
+- **Text truncation**: Results truncated to 1700 chars with "…" suffix
+
+## Configuration
+
+Environment variables:
+- `QDRANT_HOST` - Qdrant server hostname (default: "qdrant")
+- `QDRANT_PORT` - Qdrant server port (default: 6333)
+- `RABBITMQ_HOST` - RabbitMQ server hostname (default: "rabbitmq")
+- `RABBITMQ_PORT` - RabbitMQ server port (default: 5672)

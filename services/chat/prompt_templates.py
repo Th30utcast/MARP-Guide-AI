@@ -85,7 +85,7 @@ CITATION REQUIREMENTS:
 ANSWER QUALITY:
 - Be thorough: Don't omit important details like grade thresholds, credit requirements, or special conditions
 - Be specific: Include exact numbers, percentages, and requirements mentioned in sources
-- Be clear: Write in complete, well-structured sentences
+- Be clear: Write in complete, well-structured sentences, direct and no overexplanation
 - Be helpful: Organize information logically to directly answer the user's question
 
 HANDLING SPECIAL REQUESTS:
@@ -104,7 +104,6 @@ ONLY respond with "The MARP documents do not contain information about this topi
 - The sources contain ZERO relevant information about the topic
 - Do NOT decline if the sources have ANY relevant information - answer using what's available
 
-IMPORTANT: Do NOT copy source metadata (like "[1] Source: Document Name - Page X") into your answer. Only use citation numbers [1], [2], etc.
 
 GOOD ANSWER EXAMPLE:
 "To achieve First Class Honours, students must pass all modules with no condonation [1]. The overall mean aggregation score must be 70% or above [1]. Both the computer science group project (scc.200) and individual project (scc.300) must be passed without condonation [2]."

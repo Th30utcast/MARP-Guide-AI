@@ -1,9 +1,9 @@
 # Product Backlog
 
 **Project:** MARP-Guide AI RAG Chatbot
-**Last Updated:** November 5, 2025
+**Last Updated:** December 10, 2025
 **Product Owner:** Martin Grimmer
-**Current Sprint:** Sprint 1 (Assessment 1 preparation)
+**Current Sprint:** Sprint 2 (Assessment 2 complete)
 
 ## Backlog Management
 
@@ -16,16 +16,19 @@
 ## Feature Selection
 
 ### Tier 1 Feature (Foundation)
-**Chosen:** ✅ User Authentication & Session Management
+**Chosen:** ✅ User Authentication & Session Management (COMPLETED)
 - Login/logout functionality
 - Session handling
 - User-specific chat isolation
+- Model preference storage
+- Admin user support
 
 ### Tier 2 Feature (Advanced)
-**Chosen:** ✅ Multi-Model Comparison
-- Parallel answer generation with different LLMs
+**Chosen:** ✅ Multi-Model Comparison (COMPLETED)
+- Parallel answer generation with 3 LLMs
 - Side-by-side UI comparison
-- Model performance metrics
+- Model selection analytics
+- Performance metrics
 
 ---
 
@@ -37,11 +40,12 @@
 | E2 | Extraction | High | ✅ Done |
 | E3 | Indexing | High | ✅ Done |
 | E4 | Retrieval | High | ✅ Done |
-| E5 | RAG & Chat | High | 🔄 In Progress |
-| E6 | UX (Web UI) | Medium | 📋 To Do |
-| E7 | Quality & Testing | Medium | 📋 To Do |
-| E8 | User Authentication (Tier 1) | Medium | 📋 To Do |
-| E9 | Multi-Model Comparison (Tier 2) | Medium | 📋 To Do |
+| E5 | RAG & Chat | High | ✅ Done |
+| E6 | UX (Web UI) | Medium | ✅ Done |
+| E7 | Quality & Testing | Medium | ✅ Done |
+| E8 | User Authentication (Tier 1) | Medium | ✅ Done |
+| E9 | Multi-Model Comparison (Tier 2) | Medium | ✅ Done |
+| E10 | Analytics Service | Medium | ✅ Done |
 
 ---
 
@@ -167,7 +171,7 @@
 ## EPIC 5: RAG & Chat Service
 
 **Goal:** Provide chat endpoint that generates cited answers using OpenRouter LLM
-**Status:** ✅ Completed (Sprint 1)
+**Status:** ✅ Completed (Sprint 2)
 
 ### User Stories
 
@@ -176,7 +180,7 @@
 **I want** to ask questions and get answers with at least 1 citation
 **So that** I can trust the information provided
 
-**Status:** ✅ Done (Assessment 1 requirement)
+**Status:** ✅ Done (Assessment 1)
 
 ---
 
@@ -185,32 +189,41 @@
 **I want** answers with at least 2 citations
 **So that** I have more confidence in the information
 
-**Status:** 🔄 In Progress (Assessment 2 requirement)
+**Status:** ✅ Done (Assessment 2)
 
 ---
 
-#### Story 5.3: Citation Formatting and Validation
-**As a** developer
-**I want** citations to follow a consistent format
-**So that** users can easily verify sources
-
-**Status:** 📋 To Do
-
----
-
-#### Story 5.4: No Source Fallback
+#### Story 5.3: Query Reformulation
 **As a** user
-**I want** clear communication when no source exists
-**So that** I know the system's limitations
+**I want** my queries to be automatically improved
+**So that** I get better search results even with typos
 
-**Status:** 📋 To Do
+**Status:** ✅ Done (Assessment 2)
+
+---
+
+#### Story 5.4: Anti-Hallucination Protection
+**As a** user
+**I want** answers to be rejected if they lack citations
+**So that** I can trust the system isn't making things up
+
+**Status:** ✅ Done (Assessment 2)
+
+---
+
+#### Story 5.5: Citation Deduplication
+**As a** user
+**I want** duplicate citations to be removed
+**So that** citation lists are clean and concise
+
+**Status:** ✅ Done (Assessment 2)
 
 ---
 
 ## EPIC 6: UX (Web UI)
 
 **Goal:** Simple web interface for asking questions and viewing citations
-**Status:** 📋 To Do (Sprint 2)
+**Status:** ✅ Completed (Sprint 2)
 
 ### User Stories
 
@@ -219,7 +232,7 @@
 **I want** a simple interface to ask questions
 **So that** I can interact with the system easily
 
-**Status:** 📋 To Do
+**Status:** ✅ Done
 
 ---
 
@@ -228,14 +241,32 @@
 **I want** to see answers with clearly displayed citations
 **So that** I can understand and verify the information
 
-**Status:** 📋 To Do
+**Status:** ✅ Done
+
+---
+
+#### Story 6.3: Authentication UI
+**As a** user
+**I want** login and registration screens
+**So that** I can access my personalized experience
+
+**Status:** ✅ Done
+
+---
+
+#### Story 6.4: Model Comparison UI
+**As a** user
+**I want** to view side-by-side model comparisons
+**So that** I can evaluate different LLM responses
+
+**Status:** ✅ Done
 
 ---
 
 ## EPIC 7: Quality, Operations & Testing
 
 **Goal:** Reliable deployment, monitoring, and testing infrastructure
-**Status:** 📋 Partially Complete (Sprint 1 & 2)
+**Status:** ✅ Completed (Sprint 2)
 
 ### User Stories
 
@@ -257,80 +288,168 @@
 
 ---
 
-#### Story 7.3: Automated Testing
+#### Story 7.3: Input Validation
 **As a** developer
-**I want** automated unit and integration tests
-**So that** we can verify system correctness
+**I want** comprehensive input validation across all services
+**So that** we prevent invalid data from causing errors
 
-**Status:** 📋 To Do (Sprint 2)
+**Status:** ✅ Done
 
 ---
 
-#### Story 7.4: CI Pipeline with GitHub Actions
+#### Story 7.4: Error Handling
 **As a** developer
-**I want** automated tests to run on every push
-**So that** we catch bugs early
+**I want** clear error messages and proper exception handling
+**So that** debugging is easier
 
-**Status:** 📋 To Do (Sprint 2)
+**Status:** ✅ Done
+
+---
+
+#### Story 7.5: Logging and Monitoring
+**As a** developer
+**I want** structured logging across all services
+**So that** we can track system behavior
+
+**Status:** ✅ Done
 
 ---
 
 ## EPIC 8: User Authentication & Session Management (Tier 1)
 
 **Goal:** Implement login/logout with user-specific chat isolation
-**Status:** 📋 Planned (Sprint 2)
+**Status:** ✅ Completed (Sprint 2)
 
 ### User Stories
 
 #### Story 8.1: User Registration
 **As a** new user
 **I want** to create an account
-**So that** I can save my chat history
+**So that** I can access the system
 
-**Status:** 📋 To Do
+**Status:** ✅ Done
 
 ---
 
 #### Story 8.2: Login/Logout
 **As a** user
 **I want** to log in and log out
-**So that** I can access my personal chat history
+**So that** I can access my personalized experience
 
-**Status:** 📋 To Do
+**Status:** ✅ Done
 
 ---
 
-#### Story 8.3: User-Specific Chat Isolation
+#### Story 8.3: Session Management
 **As a** user
-**I want** my chats to be private
-**So that** others cannot see my questions
+**I want** my session to persist for 24 hours
+**So that** I don't have to log in repeatedly
 
-**Status:** 📋 To Do
+**Status:** ✅ Done
+
+---
+
+#### Story 8.4: Model Preference Storage
+**As a** user
+**I want** to save my preferred LLM model
+**So that** future chats use my selected model
+
+**Status:** ✅ Done
+
+---
+
+#### Story 8.5: Admin User Support
+**As an** administrator
+**I want** admin-level access to view global analytics
+**So that** I can monitor system usage
+
+**Status:** ✅ Done
 
 ---
 
 ## EPIC 9: Multi-Model Comparison (Tier 2)
 
 **Goal:** Enable parallel answer generation with multiple LLMs for comparison
-**Status:** 📋 Planned (Sprint 2)
+**Status:** ✅ Completed (Sprint 2)
 
 ### User Stories
 
 #### Story 9.1: Multi-Model Response Generation
 **As a** user
-**I want** to compare answers from different LLMs
+**I want** to compare answers from 3 different LLMs
 **So that** I can evaluate quality and consistency
 
-**Status:** 📋 To Do
+**Status:** ✅ Done
 
 ---
 
-#### Story 9.2: Side-by-Side UI Comparison
-**As a** user
-**I want** to see answers from different models side-by-side
-**So that** I can easily compare them
+#### Story 9.2: Parallel Execution
+**As a** system
+**I want** to generate answers from all models simultaneously
+**So that** comparison is fast
 
-**Status:** 📋 To Do
+**Status:** ✅ Done
+
+---
+
+#### Story 9.3: Model Selection Analytics
+**As a** user
+**I want** my model selection to be tracked
+**So that** the system can learn which models are preferred
+
+**Status:** ✅ Done
+
+---
+
+#### Story 9.4: Shared Context
+**As a** user
+**I want** all models to receive the same retrieval context
+**So that** the comparison is fair
+
+**Status:** ✅ Done
+
+---
+
+## EPIC 10: Analytics Service
+
+**Goal:** Track user interactions and system metrics
+**Status:** ✅ Completed (Sprint 2)
+
+### User Stories
+
+#### Story 10.1: Event Consumption
+**As a** system
+**I want** to consume analytics events from RabbitMQ
+**So that** we can track user behavior
+
+**Status:** ✅ Done
+
+---
+
+#### Story 10.2: Analytics Endpoints
+**As an** administrator
+**I want** API endpoints to view system metrics
+**So that** I can understand usage patterns
+
+**Status:** ✅ Done
+
+---
+
+#### Story 10.3: User-Specific Analytics
+**As a** user
+**I want** to view my own usage statistics
+**So that** I can track my queries
+
+**Status:** ✅ Done
+
+---
+
+#### Story 10.4: Admin Analytics
+**As an** administrator
+**I want** to view global system analytics
+**So that** I can monitor overall usage
+
+**Status:** ✅ Done
 
 ---
 
@@ -341,16 +460,40 @@
 - ✅ EPIC 2: Extraction
 - ✅ EPIC 3: Indexing
 - ✅ EPIC 4: Retrieval
-- ✅ EPIC 5: RAG & Chat
+- ✅ EPIC 5: RAG & Chat (Basic)
 
 ### Sprint 2 (Weeks 6-10) - Assessment 2
-- 🔄 EPIC 5: RAG & Chat
-- 📋 EPIC 6: UX
-- 📋 EPIC 7: Quality
-- 📋 EPIC 8: User Authentication
-- 📋 EPIC 9: Multi-Model Comparison
+- ✅ EPIC 5: RAG & Chat (Enhanced)
+- ✅ EPIC 6: UX (Web UI)
+- ✅ EPIC 7: Quality & Operations
+- ✅ EPIC 8: User Authentication (Tier 1)
+- ✅ EPIC 9: Multi-Model Comparison (Tier 2)
+- ✅ EPIC 10: Analytics Service
 
 ---
 
-**Last Updated:** November 5, 2025
-**Next Review:** Sprint 2 Planning (Week 6)
+## Event Summary
+
+**Total Events Implemented:** 10
+
+### Document Processing Pipeline Events (4)
+1. DocumentDiscovered
+2. DocumentExtracted
+3. ChunksIndexed
+4. RetrievalCompleted
+
+### Error Events (3)
+5. IngestionFailed
+6. ExtractionFailed
+7. IndexingFailed
+
+### User Interaction & Analytics Events (3)
+8. QuerySubmitted
+9. ResponseGenerated
+10. ModelComparisonTriggered
+
+---
+
+**Last Updated:** December 10, 2025
+**Sprint Status:** Sprint 2 COMPLETED
+**Assessment 2:** December 10, 2025

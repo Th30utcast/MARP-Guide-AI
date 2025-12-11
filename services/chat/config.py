@@ -11,6 +11,7 @@ RETRIEVAL_URL = os.getenv("RETRIEVAL_URL", "http://retrieval:8002")
 # OpenRouter Configuration
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+PRIMARY_MODEL_ID = OPENROUTER_MODEL  # Alias for analytics events
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 # RabbitMQ Configuration
@@ -18,6 +19,10 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "rabbitmq")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", "5672"))
 RABBITMQ_USER = os.getenv("RABBITMQ_USER", "guest")
 RABBITMQ_PASSWORD = os.getenv("RABBITMQ_PASSWORD", "guest")
+
+# Redis Configuration (for session validation)
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
 # RAG Configuration
 DEFAULT_TOP_K = 10

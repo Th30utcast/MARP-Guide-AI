@@ -30,18 +30,24 @@ sequenceDiagram
 
   Note over IX: Prepare Qdrant points<br/>(vector + metadata)
 
-  IX->>QD: Upsert batch of points<br/>to marp-documents collection
-  QD-->>IX: Success confirmation
+  alt Success
+    IX->>QD: Upsert batch of points<br/>to marp-documents collection
+    Note over QD: Retry up to 10 times<br/>with 2s delay
+    QD-->>IX: Success confirmation
 
-  IX->>FS: Save chunks.json<br/>(for debugging)
+    IX->>FS: Save chunks.json<br/>(for debugging)
+    IX->>FS: Save indexed.json
 
-  IX->>BR: Publish ChunksIndexed event
+    IX->>BR: Publish ChunksIndexed event
+    Note over BR: Event sent to<br/>documents.indexed queue
 
-  Note over BR: Event sent to<br/>documents.indexed queue
-
-  IX->>IX: Acknowledge message
-
-  Note over IX: Indexing complete
+    IX->>IX: Acknowledge message
+    Note over IX: Indexing complete
+  else Failure
+    IX->>BR: Publish IndexingFailed event
+    Note over BR: Event sent to<br/>documents.indexing.failed
+    IX->>IX: Acknowledge message (reject)
+  end
 ```
 
 ## ChunksIndexed Event
@@ -74,6 +80,7 @@ storage/extracted/
     pages.jsonl         ← (from extraction)
     extracted.json      ← (from extraction)
     chunks.json         ← Chunk metadata (debugging)
+    indexed.json        ← ChunksIndexed event
 ```
 
 ## Example Qdrant Point
@@ -100,11 +107,41 @@ storage/extracted/
 - **Overlap**: 50 tokens (25% context preservation)
 - **Tokenizer**: SentenceTransformer tokenizer (accurate counting)
 
+## IndexingFailed Event
+
+Published when indexing fails (Qdrant connection issues, embedding errors, etc.):
+
+```json
+{
+  "eventType": "IndexingFailed",
+  "eventId": "uuid",
+  "timestamp": "2025-11-02T14:54:00Z",
+  "correlationId": "uuid",
+  "source": "indexing-service",
+  "version": "1.0",
+  "payload": {
+    "documentId": "Failed-Doc",
+    "errorType": "VectorDBError",
+    "errorMessage": "Failed to connect to Qdrant: Connection timeout",
+    "failedAt": "2025-11-02T14:54:00Z"
+  }
+}
+```
+
+Routing key: `documents.indexing.failed`
+
+## Error Handling
+
+- **Qdrant Connection**: Retries up to 10 times with 2-second exponential backoff
+- **Embedding Errors**: IndexingFailed event published with error details
+- **Empty Chunks**: Skipped with warning logged
+
 ## Technologies
 
 - **Worker**: Python worker process
 - **ML Framework**: SentenceTransformers
 - **Embedding Model**: all-MiniLM-L6-v2 (384-dim)
-- **Vector Database**: Qdrant (cosine similarity)
+- **Vector Database**: Qdrant (cosine similarity, retry logic: 10 attempts, 2s delay)
 - **Message Broker**: RabbitMQ (pika client)
+- **Batch Size**: 32 chunks per embedding batch
 - **Health Check**: HTTP server on port 8080
